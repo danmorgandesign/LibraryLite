@@ -1,7 +1,9 @@
 /**
- * Theme values below are pulled 1:1 from the "Design Tokens" variable
- * collection in the Library Lite Figma file (node-id=29-113), so changes
- * to that collection should be mirrored here.
+ * Base tokens (color/surface/border, spacing) come from the "Design Tokens"
+ * variable collection in the Library Lite Figma file (node-id=29-113).
+ * Radius scale and the accent color were restyled after ramp.com: tight
+ * 6/10px rounded rects instead of pill buttons, and a lime accent fill for
+ * the primary CTA, in place of the previous white/bordered pill look.
  * @type {import('tailwindcss').Config}
  */
 export default {
@@ -9,7 +11,6 @@ export default {
   theme: {
     extend: {
       colors: {
-        // color/primitive/* + color/text|surface|border/* semantic aliases
         ink: {
           primary: '#0D0D0D', // color/text/primary -> color/primitive/neutral-900
           muted: '#6B7280', // color/text/muted -> color/primitive/neutral-500
@@ -21,10 +22,13 @@ export default {
         line: {
           DEFAULT: '#E4E4E0', // color/border/default -> color/primitive/neutral-200
         },
+        accent: {
+          DEFAULT: '#EAF22E', // ramp.com primary-button fill (lime/chartreuse)
+        },
       },
       borderRadius: {
-        input: '8px', // radius/input
-        pill: '999px', // radius/pill
+        sm: '6px', // ramp.com button/nav-hover radius
+        md: '10px', // ramp.com input radius
       },
       spacing: {
         xs: '8px', // space/xs
@@ -35,8 +39,8 @@ export default {
         '2xl': '32px', // space/2xl
       },
       fontFamily: {
-        display: ['Quicksand', 'ui-sans-serif', 'sans-serif'], // Display/Logo text style
-        sans: ['Inter', 'ui-sans-serif', 'sans-serif'], // Heading/Body/Label text styles
+        // ramp.com uses a single grotesk sans everywhere (no separate display font)
+        sans: ['Inter', 'ui-sans-serif', 'sans-serif'],
       },
     },
   },
