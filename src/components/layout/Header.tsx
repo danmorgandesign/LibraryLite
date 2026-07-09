@@ -2,7 +2,7 @@ const navItems = ['Books', 'Classes'];
 
 export default function Header() {
   return (
-    <header className="sticky top-0 z-10 border-b border-line bg-surface/95 backdrop-blur">
+    <header className="fixed inset-x-0 top-0 z-10 border-b border-line bg-surface/95 backdrop-blur">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-md px-lg py-md lg:flex-nowrap lg:justify-between">
         <a href="/" className="shrink-0 font-sans text-2xl font-bold tracking-tight text-ink-primary lg:text-3xl">
           Library Lite
