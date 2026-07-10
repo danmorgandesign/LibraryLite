@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { BarcodeDetector } from 'barcode-detector/ponyfill';
-import { supabase } from '../lib/supabaseClient';
+import { getSupabaseClient } from '../lib/supabaseClient';
 import NotInCataloguePage from './NotInCataloguePage';
 
 type CameraStatus = 'requesting' | 'active' | 'error';
@@ -38,6 +38,8 @@ async function lookupExternalBookData(barcode: string): Promise<{ title: string 
 }
 
 async function lookupBarcode(barcode: string): Promise<ScanResult> {
+  const supabase = getSupabaseClient();
+
   const { data: book, error: bookError } = await supabase
     .from('books')
     .select('id, title, author')
