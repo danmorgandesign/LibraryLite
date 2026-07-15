@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { BarcodeDetector } from 'barcode-detector/ponyfill';
-import { getSupabaseClient } from '../lib/supabaseClient';
+import { ensureTenantSession, getSupabaseClient, getTenantSchoolId } from '../lib/supabaseClient';
 import NotInCataloguePage from './NotInCataloguePage';
 
 type CameraStatus = 'requesting' | 'active' | 'error';
@@ -39,6 +39,7 @@ async function lookupExternalBookData(barcode: string): Promise<{ title: string 
 
 async function lookupBarcode(barcode: string): Promise<ScanResult> {
   const supabase = getSupabaseClient();
+  await ensureTenantSession();
 
   const { data: book, error: bookError } = await supabase
     .from('books')
@@ -64,10 +65,41 @@ async function lookupBarcode(barcode: string): Promise<ScanResult> {
   return activeLoan ? { status: 'on-loan', book } : { status: 'available', book };
 }
 
+async function addBookToCatalogue(params: {
+  barcode: string;
+  title: string | null;
+  author: string | null;
+  coverUrl: string | null;
+}): Promise<Book> {
+  const supabase = getSupabaseClient();
+  await ensureTenantSession();
+
+  const { data, error } = await supabase
+    .from('books')
+    // `title` is NOT NULL in the schema — the external lookup doesn't always
+    // find one (e.g. a school-only book with no ISBN match), so fall back to
+    // a placeholder built from the barcode rather than blocking the add.
+    // There's no rename UI yet, so this is a known rough edge, not final.
+    .insert({
+      school_id: getTenantSchoolId(),
+      barcode: params.barcode,
+      title: params.title ?? `Book ${params.barcode}`,
+      author: params.author,
+      cover_url: params.coverUrl,
+    })
+    .select('id, title, author')
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
 export default function ScanBookPage({ onClose }: { onClose: () => void }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [cameraStatus, setCameraStatus] = useState<CameraStatus>('requesting');
   const [scanResult, setScanResult] = useState<ScanResult>({ status: 'scanning' });
+  const [isAddingToCatalogue, setIsAddingToCatalogue] = useState(false);
+  const [addToCatalogueError, setAddToCatalogueError] = useState<string | null>(null);
 
   useEffect(() => {
     let stream: MediaStream | null = null;
@@ -131,14 +163,28 @@ export default function ScanBookPage({ onClose }: { onClose: () => void }) {
   const resetScan = () => setScanResult({ status: 'scanning' });
 
   if (scanResult.status === 'not-in-catalogue') {
+    const { barcode, title, author, coverUrl } = scanResult;
     return (
       <NotInCataloguePage
-        barcode={scanResult.barcode}
-        title={scanResult.title}
-        author={scanResult.author}
-        coverUrl={scanResult.coverUrl}
-        onAddToCatalogue={() => {
-          // Not wired up yet — cataloguing a new book is a future step.
+        barcode={barcode}
+        title={title}
+        author={author}
+        coverUrl={coverUrl}
+        isAdding={isAddingToCatalogue}
+        error={addToCatalogueError}
+        onAddToCatalogue={async () => {
+          setIsAddingToCatalogue(true);
+          setAddToCatalogueError(null);
+          try {
+            const book = await addBookToCatalogue({ barcode, title, author, coverUrl });
+            // A book with no loan record is, by definition, available — reuse
+            // the existing "available" result rather than a new screen.
+            setScanResult({ status: 'available', book });
+          } catch (err) {
+            setAddToCatalogueError(err instanceof Error ? err.message : 'Could not add this book — try again.');
+          } finally {
+            setIsAddingToCatalogue(false);
+          }
         }}
         onNotNow={onClose}
       />
