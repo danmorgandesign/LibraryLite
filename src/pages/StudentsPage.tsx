@@ -3,8 +3,7 @@ import Header from '../components/layout/Header';
 import { ensureTenantSession, getSupabaseClient } from '../lib/supabaseClient';
 
 type Student = { id: string; first_name: string; last_initial: string | null };
-type BookStatus = 'Overdue' | 'On Loan' | 'None';
-type StudentRow = Student & { classroomId: string | null; classroomLabel: string; bookStatus: BookStatus };
+type StudentRow = Student & { classroomId: string | null; classroomLabel: string; loanCount: number };
 type Classroom = { id: string; class_label: string };
 
 type Props = {
@@ -17,36 +16,16 @@ type Props = {
   initialClassroomId?: string;
 };
 
-// The schema has no due_date column — loans are due 3 weeks after they're
-// checked out (matches the window used on Class Loans / Student Detail).
-const LOAN_WINDOW_DAYS = 21;
-
 const SORT_OPTIONS = [
-  { key: 'alphabet', label: 'Alphabetical' },
+  { key: 'alphabet', label: 'Alphabetical (A-Z)' },
   { key: 'class', label: 'Class' },
-  { key: 'status', label: 'Book Status' },
+  { key: 'loans', label: 'Books on Loan' },
 ] as const;
 
 type SortKey = (typeof SORT_OPTIONS)[number]['key'];
 
-const STATUS_ORDER: Record<BookStatus, number> = { Overdue: 0, 'On Loan': 1, None: 2 };
-
 function formatName(student: Student) {
   return student.last_initial ? `${student.first_name} ${student.last_initial}.` : student.first_name;
-}
-
-function StatusBadge({ status }: { status: BookStatus }) {
-  if (status === 'None') return <span className="text-sm text-ink-muted">—</span>;
-  const isOverdue = status === 'Overdue';
-  return (
-    <span
-      className={`inline-flex w-fit items-center rounded-full border px-md py-xs text-xs font-medium ${
-        isOverdue ? 'border-rose-200 bg-rose-50 text-rose-800' : 'border-amber-200 bg-amber-50 text-amber-800'
-      }`}
-    >
-      {status}
-    </span>
-  );
 }
 
 async function fetchClassrooms(): Promise<Classroom[]> {
@@ -63,12 +42,10 @@ async function fetchStudents(): Promise<StudentRow[]> {
 
   const { data, error } = await supabase
     .from('students')
-    .select('id, first_name, last_initial, classroom_id, classrooms(class_label), loans(loaned_at, returned_at)')
+    .select('id, first_name, last_initial, classroom_id, classrooms(class_label), loans(returned_at)')
     .order('first_name');
 
   if (error) throw error;
-
-  const now = Date.now();
 
   // Supabase's untyped client infers embedded to-one relations as arrays
   // (it can't see the FK cardinality without generated DB types) — at
@@ -80,25 +57,15 @@ async function fetchStudents(): Promise<StudentRow[]> {
     last_initial: string | null;
     classroom_id: string | null;
     classrooms: { class_label: string } | null;
-    loans: Array<{ loaned_at: string; returned_at: string | null }>;
-  }>).map((s) => {
-    const activeLoans = s.loans.filter((l) => l.returned_at === null);
-    let bookStatus: BookStatus = 'None';
-    if (activeLoans.length > 0) {
-      const isOverdue = activeLoans.some(
-        (l) => new Date(l.loaned_at).getTime() + LOAN_WINDOW_DAYS * 24 * 60 * 60 * 1000 < now,
-      );
-      bookStatus = isOverdue ? 'Overdue' : 'On Loan';
-    }
-    return {
-      id: s.id,
-      first_name: s.first_name,
-      last_initial: s.last_initial,
-      classroomId: s.classroom_id,
-      classroomLabel: s.classrooms?.class_label ?? 'Unassigned',
-      bookStatus,
-    };
-  });
+    loans: Array<{ returned_at: string | null }>;
+  }>).map((s) => ({
+    id: s.id,
+    first_name: s.first_name,
+    last_initial: s.last_initial,
+    classroomId: s.classroom_id,
+    classroomLabel: s.classrooms?.class_label ?? 'Unassigned',
+    loanCount: s.loans.filter((l) => l.returned_at === null).length,
+  }));
 }
 
 export default function StudentsPage({ onScan, onBooksClick, onClassesClick, onStudentClick, initialClassroomId }: Props) {
@@ -152,9 +119,9 @@ export default function StudentsPage({ onScan, onBooksClick, onClassesClick, onS
         const byClass = a.classroomLabel.localeCompare(b.classroomLabel);
         return byClass !== 0 ? byClass : a.first_name.localeCompare(b.first_name);
       }
-      if (sortBy === 'status') {
-        const byStatus = STATUS_ORDER[a.bookStatus] - STATUS_ORDER[b.bookStatus];
-        return byStatus !== 0 ? byStatus : a.first_name.localeCompare(b.first_name);
+      if (sortBy === 'loans') {
+        const byCount = b.loanCount - a.loanCount;
+        return byCount !== 0 ? byCount : a.first_name.localeCompare(b.first_name);
       }
       return a.first_name.localeCompare(b.first_name);
     });
@@ -230,10 +197,11 @@ export default function StudentsPage({ onScan, onBooksClick, onClassesClick, onS
           )}
 
           <div className="mt-lg">
-            <div className="hidden grid-cols-[1fr_1fr_120px] gap-lg border-b border-line pb-sm text-xs font-semibold uppercase tracking-wide text-ink-muted sm:grid">
+            <div className="hidden grid-cols-[1fr_1fr_120px_90px] gap-lg border-b border-line pb-sm text-xs font-semibold uppercase tracking-wide text-ink-muted sm:grid">
               <span>Name</span>
               <span>Class</span>
-              <span>Book Status</span>
+              <span>Books on Loan</span>
+              <span aria-hidden="true" />
             </div>
 
             {isLoading && <p className="py-lg text-sm text-ink-muted">Loading students…</p>}
@@ -244,17 +212,18 @@ export default function StudentsPage({ onScan, onBooksClick, onClassesClick, onS
               visibleStudents.map((student) => (
                 <div
                   key={student.id}
-                  className="grid grid-cols-1 items-center gap-xs border-b border-line py-sm sm:grid-cols-[1fr_1fr_120px] sm:gap-lg"
+                  className="grid grid-cols-1 items-center gap-xs border-b border-line py-sm sm:grid-cols-[1fr_1fr_120px_90px] sm:gap-lg"
                 >
+                  <p className="text-sm font-medium text-ink-primary">{formatName(student)}</p>
+                  <p className="text-sm text-ink-muted">{student.classroomLabel}</p>
+                  <p className="text-sm text-ink-muted">{student.loanCount}</p>
                   <button
                     type="button"
                     onClick={() => onStudentClick(student)}
-                    className="w-fit text-left text-sm font-medium text-ink-primary underline-offset-2 hover:underline"
+                    className="inline-flex min-h-[36px] w-fit items-center rounded-sm border border-line bg-surface px-md text-sm font-medium text-ink-primary transition-opacity hover:opacity-80"
                   >
-                    {formatName(student)}
+                    Details
                   </button>
-                  <p className="text-sm text-ink-muted">{student.classroomLabel}</p>
-                  <StatusBadge status={student.bookStatus} />
                 </div>
               ))}
 
