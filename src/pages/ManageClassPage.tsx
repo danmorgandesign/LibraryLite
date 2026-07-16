@@ -18,6 +18,7 @@ type Modal =
   | { type: 'edit'; student: Student }
   | { type: 'remove'; student: Student }
   | { type: 'delete-class' }
+  | { type: 'rename-class' }
   | null;
 
 function Modal({ children }: { children: React.ReactNode }) {
@@ -59,7 +60,8 @@ async function fetchStudents(classroomId: string): Promise<Student[]> {
   return data;
 }
 
-export default function ManageClassPage({ classroomId, classroomLabel, onScan, onBooksClick, onClassesClick, onBack }: Props) {
+export default function ManageClassPage({ classroomId, classroomLabel: initialClassroomLabel, onScan, onBooksClick, onClassesClick, onBack }: Props) {
+  const [classroomLabel, setClassroomLabel] = useState(initialClassroomLabel);
   const [students, setStudents] = useState<Student[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [modal, setModal] = useState<Modal>(null);
@@ -171,6 +173,43 @@ export default function ManageClassPage({ classroomId, classroomLabel, onScan, o
     }
   };
 
+  const handleRenameClass = async () => {
+    const trimmed = nameInput.trim();
+    if (!trimmed) {
+      setActionError('Enter a name for the class.');
+      return;
+    }
+    setIsSubmitting(true);
+    setActionError(null);
+    try {
+      await ensureTenantSession();
+      const supabase = getSupabaseClient();
+
+      // Check for a name clash among this school's other classes before
+      // writing anything — case-insensitive, so "Squirrels" and "squirrels"
+      // still count as the same name.
+      const { data: others, error: fetchError } = await supabase
+        .from('classrooms')
+        .select('id, class_label')
+        .neq('id', classroomId);
+      if (fetchError) throw fetchError;
+      const isDuplicate = others.some((c) => c.class_label.trim().toLowerCase() === trimmed.toLowerCase());
+      if (isDuplicate) {
+        setActionError(`A class named "${trimmed}" already exists.`);
+        return;
+      }
+
+      const { error } = await supabase.from('classrooms').update({ class_label: trimmed }).eq('id', classroomId);
+      if (error) throw error;
+      setClassroomLabel(trimmed);
+      closeModal();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not rename class.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <>
       <Header activeItem="classes" onScan={onScan} onBooksClick={onBooksClick} onClassesClick={onClassesClick} />
@@ -196,6 +235,19 @@ export default function ManageClassPage({ classroomId, classroomLabel, onScan, o
               className="inline-flex min-h-[44px] items-center rounded-sm border border-line bg-surface px-md text-sm font-medium text-rose-700 transition-opacity hover:opacity-80"
             >
               Delete Class
+            </button>
+          </div>
+
+          <div className="mt-md flex justify-end">
+            <button
+              type="button"
+              onClick={() => {
+                setNameInput(classroomLabel);
+                setModal({ type: 'rename-class' });
+              }}
+              className="inline-flex min-h-[44px] items-center rounded-sm border border-line bg-surface px-md text-sm font-medium text-ink-primary transition-opacity hover:opacity-80"
+            >
+              Change Class Name
             </button>
           </div>
 
@@ -248,49 +300,63 @@ export default function ManageClassPage({ classroomId, classroomLabel, onScan, o
 
       {modal?.type === 'add' && (
         <Modal>
-          <h2 className="text-lg font-semibold text-ink-primary">Add Student</h2>
-          <p className="mt-xs text-sm text-ink-muted">Enter a name for the new student.</p>
-          <input
-            autoFocus
-            type="text"
-            value={nameInput}
-            onChange={(e) => setNameInput(e.target.value)}
-            placeholder="First name, or First L. if needed"
-            className="mt-md w-full rounded-sm border border-line bg-surface-subtle px-md py-sm text-sm text-ink-primary placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-ink-primary/20"
-          />
-          {actionError && <p className="mt-sm text-sm text-red-600">{actionError}</p>}
-          <div className="mt-lg flex justify-end gap-sm">
-            <button type="button" onClick={closeModal} disabled={isSubmitting} className="inline-flex min-h-[44px] items-center rounded-sm border border-line bg-surface px-md text-sm font-medium text-ink-primary disabled:opacity-60">
-              Cancel
-            </button>
-            <button type="button" onClick={handleAdd} disabled={isSubmitting} className="inline-flex min-h-[44px] items-center rounded-sm bg-ink-primary px-md text-sm font-medium text-white disabled:opacity-60">
-              {isSubmitting ? 'Adding…' : 'Add Student'}
-            </button>
-          </div>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleAdd();
+            }}
+          >
+            <h2 className="text-lg font-semibold text-ink-primary">Add Student</h2>
+            <p className="mt-xs text-sm text-ink-muted">Enter a name for the new student.</p>
+            <input
+              autoFocus
+              type="text"
+              value={nameInput}
+              onChange={(e) => setNameInput(e.target.value)}
+              placeholder="First name, or First L. if needed"
+              className="mt-md w-full rounded-sm border border-line bg-surface-subtle px-md py-sm text-sm text-ink-primary placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-ink-primary/20"
+            />
+            {actionError && <p className="mt-sm text-sm text-red-600">{actionError}</p>}
+            <div className="mt-lg flex justify-end gap-sm">
+              <button type="button" onClick={closeModal} disabled={isSubmitting} className="inline-flex min-h-[44px] items-center rounded-sm border border-line bg-surface px-md text-sm font-medium text-ink-primary disabled:opacity-60">
+                Cancel
+              </button>
+              <button type="submit" disabled={isSubmitting} className="inline-flex min-h-[44px] items-center rounded-sm bg-ink-primary px-md text-sm font-medium text-white disabled:opacity-60">
+                {isSubmitting ? 'Adding…' : 'Add Student'}
+              </button>
+            </div>
+          </form>
         </Modal>
       )}
 
       {modal?.type === 'edit' && (
         <Modal>
-          <h2 className="text-lg font-semibold text-ink-primary">Edit Student</h2>
-          <p className="mt-xs text-sm text-ink-muted">Update the student's name.</p>
-          <input
-            autoFocus
-            type="text"
-            value={nameInput}
-            onChange={(e) => setNameInput(e.target.value)}
-            placeholder="First name, or First L. if needed"
-            className="mt-md w-full rounded-sm border border-line bg-surface-subtle px-md py-sm text-sm text-ink-primary placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-ink-primary/20"
-          />
-          {actionError && <p className="mt-sm text-sm text-red-600">{actionError}</p>}
-          <div className="mt-lg flex justify-end gap-sm">
-            <button type="button" onClick={closeModal} disabled={isSubmitting} className="inline-flex min-h-[44px] items-center rounded-sm border border-line bg-surface px-md text-sm font-medium text-ink-primary disabled:opacity-60">
-              Cancel
-            </button>
-            <button type="button" onClick={handleSaveEdit} disabled={isSubmitting} className="inline-flex min-h-[44px] items-center rounded-sm bg-ink-primary px-md text-sm font-medium text-white disabled:opacity-60">
-              {isSubmitting ? 'Saving…' : 'Save'}
-            </button>
-          </div>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleSaveEdit();
+            }}
+          >
+            <h2 className="text-lg font-semibold text-ink-primary">Edit Student</h2>
+            <p className="mt-xs text-sm text-ink-muted">Update the student's name.</p>
+            <input
+              autoFocus
+              type="text"
+              value={nameInput}
+              onChange={(e) => setNameInput(e.target.value)}
+              placeholder="First name, or First L. if needed"
+              className="mt-md w-full rounded-sm border border-line bg-surface-subtle px-md py-sm text-sm text-ink-primary placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-ink-primary/20"
+            />
+            {actionError && <p className="mt-sm text-sm text-red-600">{actionError}</p>}
+            <div className="mt-lg flex justify-end gap-sm">
+              <button type="button" onClick={closeModal} disabled={isSubmitting} className="inline-flex min-h-[44px] items-center rounded-sm border border-line bg-surface px-md text-sm font-medium text-ink-primary disabled:opacity-60">
+                Cancel
+              </button>
+              <button type="submit" disabled={isSubmitting} className="inline-flex min-h-[44px] items-center rounded-sm bg-ink-primary px-md text-sm font-medium text-white disabled:opacity-60">
+                {isSubmitting ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </form>
         </Modal>
       )}
 
@@ -323,6 +389,37 @@ export default function ManageClassPage({ classroomId, classroomLabel, onScan, o
               {isSubmitting ? 'Deleting…' : 'Delete Class'}
             </button>
           </div>
+        </Modal>
+      )}
+
+      {modal?.type === 'rename-class' && (
+        <Modal>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleRenameClass();
+            }}
+          >
+            <h2 className="text-lg font-semibold text-ink-primary">Change Class Name</h2>
+            <p className="mt-xs text-sm text-ink-muted">Enter a new name for this class.</p>
+            <input
+              autoFocus
+              type="text"
+              value={nameInput}
+              onChange={(e) => setNameInput(e.target.value)}
+              placeholder="Class name"
+              className="mt-md w-full rounded-sm border border-line bg-surface-subtle px-md py-sm text-sm text-ink-primary placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-ink-primary/20"
+            />
+            {actionError && <p className="mt-sm text-sm text-red-600">{actionError}</p>}
+            <div className="mt-lg flex justify-end gap-sm">
+              <button type="button" onClick={closeModal} disabled={isSubmitting} className="inline-flex min-h-[44px] items-center rounded-sm border border-line bg-surface px-md text-sm font-medium text-ink-primary disabled:opacity-60">
+                Cancel
+              </button>
+              <button type="submit" disabled={isSubmitting} className="inline-flex min-h-[44px] items-center rounded-sm bg-ink-primary px-md text-sm font-medium text-white disabled:opacity-60">
+                {isSubmitting ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </form>
         </Modal>
       )}
     </>
