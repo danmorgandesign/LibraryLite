@@ -7,9 +7,11 @@ import ManageClassPage from './pages/ManageClassPage';
 import ScanBookPage from './pages/ScanBookPage';
 
 type Page = 'landing' | 'scan' | 'books' | 'classes' | 'manage-class' | 'class-loans';
+type Classroom = { id: string; class_label: string };
 
 export default function App() {
   const [page, setPage] = useState<Page>('landing');
+  const [selectedClassroom, setSelectedClassroom] = useState<Classroom | null>(null);
 
   if (page === 'scan') {
     return <ScanBookPage onClose={() => setPage('landing')} />;
@@ -24,15 +26,23 @@ export default function App() {
       <ClassesPage
         onScan={() => setPage('scan')}
         onBooksClick={() => setPage('books')}
-        onManageClass={() => setPage('manage-class')}
-        onViewLoans={() => setPage('class-loans')}
+        onManageClass={(classroom) => {
+          setSelectedClassroom(classroom);
+          setPage('manage-class');
+        }}
+        onViewLoans={(classroom) => {
+          setSelectedClassroom(classroom);
+          setPage('class-loans');
+        }}
       />
     );
   }
 
-  if (page === 'manage-class') {
+  if (page === 'manage-class' && selectedClassroom) {
     return (
       <ManageClassPage
+        classroomId={selectedClassroom.id}
+        classroomLabel={selectedClassroom.class_label}
         onScan={() => setPage('scan')}
         onBooksClick={() => setPage('books')}
         onBack={() => setPage('classes')}
@@ -40,9 +50,11 @@ export default function App() {
     );
   }
 
-  if (page === 'class-loans') {
+  if (page === 'class-loans' && selectedClassroom) {
     return (
       <ClassLoansPage
+        classroomId={selectedClassroom.id}
+        classroomLabel={selectedClassroom.class_label}
         onScan={() => setPage('scan')}
         onBooksClick={() => setPage('books')}
         onBack={() => setPage('classes')}

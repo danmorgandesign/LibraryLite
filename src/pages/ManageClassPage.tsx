@@ -1,23 +1,21 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Header from '../components/layout/Header';
+import { ensureTenantSession, getSupabaseClient, getTenantSchoolId } from '../lib/supabaseClient';
 
 type Props = {
+  classroomId: string;
+  classroomLabel: string;
   onScan: () => void;
   onBooksClick: () => void;
   onBack: () => void;
 };
 
-// Placeholder roster — matches the Figma "Manage Class" card grid until this
-// reads from a real `students` table (see BooksPage for the same pattern).
-const INITIAL_STUDENTS = [
-  'Ava M.', 'Noah T.', 'Isla P.', 'Leo R.', 'Mia K.', 'Oscar B.',
-  'Freya L.', 'Jack W.', 'Amelia S.', 'Harry D.', 'Grace N.',
-];
+type Student = { id: string; first_name: string; last_initial: string };
 
 type Modal =
   | { type: 'add' }
-  | { type: 'edit'; index: number }
-  | { type: 'remove'; index: number }
+  | { type: 'edit'; student: Student }
+  | { type: 'remove'; student: Student }
   | { type: 'delete-class' }
   | null;
 
@@ -29,43 +27,145 @@ function Modal({ children }: { children: React.ReactNode }) {
   );
 }
 
-export default function ManageClassPage({ onScan, onBooksClick, onBack }: Props) {
-  const [students, setStudents] = useState(INITIAL_STUDENTS);
+// Students are stored as first_name + last_initial (matches the roster
+// migration's shortcode convention) but the UI takes one "First L." field —
+// split on the last space, and drop a trailing "." from the initial.
+function parseName(input: string): { first_name: string; last_initial: string } | null {
+  const trimmed = input.trim();
+  const lastSpace = trimmed.lastIndexOf(' ');
+  if (lastSpace === -1) return null;
+  const first_name = trimmed.slice(0, lastSpace).trim();
+  const last_initial = trimmed.slice(lastSpace + 1).replace(/\.$/, '').trim();
+  if (!first_name || !last_initial) return null;
+  return { first_name, last_initial };
+}
+
+function formatName(student: Student) {
+  return `${student.first_name} ${student.last_initial}.`;
+}
+
+async function fetchStudents(classroomId: string): Promise<Student[]> {
+  await ensureTenantSession();
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from('students')
+    .select('id, first_name, last_initial')
+    .eq('classroom_id', classroomId)
+    .order('first_name');
+  if (error) throw error;
+  return data;
+}
+
+export default function ManageClassPage({ classroomId, classroomLabel, onScan, onBooksClick, onBack }: Props) {
+  const [students, setStudents] = useState<Student[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [modal, setModal] = useState<Modal>(null);
   const [nameInput, setNameInput] = useState('');
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchStudents(classroomId)
+      .then((data) => {
+        if (!cancelled) setStudents(data);
+      })
+      .catch((err) => {
+        if (!cancelled) setLoadError(err instanceof Error ? err.message : 'Could not load students.');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [classroomId]);
+
+  const isLoading = students === null && !loadError;
 
   const closeModal = () => {
     setModal(null);
     setNameInput('');
+    setActionError(null);
   };
 
-  const openAdd = () => {
-    setNameInput('');
-    setModal({ type: 'add' });
-  };
-
-  const openEdit = (index: number) => {
-    setNameInput(students[index]);
-    setModal({ type: 'edit', index });
-  };
-
-  const handleAdd = () => {
-    if (nameInput.trim()) setStudents((prev) => [...prev, nameInput.trim()]);
-    closeModal();
-  };
-
-  const handleSaveEdit = () => {
-    if (modal?.type === 'edit' && nameInput.trim()) {
-      setStudents((prev) => prev.map((s, i) => (i === modal.index ? nameInput.trim() : s)));
+  const handleAdd = async () => {
+    const parsed = parseName(nameInput);
+    if (!parsed) {
+      setActionError('Enter a name as "First L." (e.g. "Ava M.").');
+      return;
     }
-    closeModal();
+    setIsSubmitting(true);
+    setActionError(null);
+    try {
+      await ensureTenantSession();
+      const supabase = getSupabaseClient();
+      const { data, error } = await supabase
+        .from('students')
+        .insert({ school_id: getTenantSchoolId(), classroom_id: classroomId, ...parsed })
+        .select('id, first_name, last_initial')
+        .single();
+      if (error) throw error;
+      setStudents((prev) => [...(prev ?? []), data].sort((a, b) => a.first_name.localeCompare(b.first_name)));
+      closeModal();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not add student.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleRemove = () => {
-    if (modal?.type === 'remove') {
-      setStudents((prev) => prev.filter((_, i) => i !== modal.index));
+  const handleSaveEdit = async () => {
+    if (modal?.type !== 'edit') return;
+    const parsed = parseName(nameInput);
+    if (!parsed) {
+      setActionError('Enter a name as "First L." (e.g. "Ava M.").');
+      return;
     }
-    closeModal();
+    setIsSubmitting(true);
+    setActionError(null);
+    try {
+      await ensureTenantSession();
+      const supabase = getSupabaseClient();
+      const { error } = await supabase.from('students').update(parsed).eq('id', modal.student.id);
+      if (error) throw error;
+      setStudents((prev) => (prev ?? []).map((s) => (s.id === modal.student.id ? { ...s, ...parsed } : s)));
+      closeModal();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not update student.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleRemove = async () => {
+    if (modal?.type !== 'remove') return;
+    setIsSubmitting(true);
+    setActionError(null);
+    try {
+      await ensureTenantSession();
+      const supabase = getSupabaseClient();
+      const { error } = await supabase.from('students').delete().eq('id', modal.student.id);
+      if (error) throw error;
+      setStudents((prev) => (prev ?? []).filter((s) => s.id !== modal.student.id));
+      closeModal();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not remove student.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteClass = async () => {
+    setIsSubmitting(true);
+    setActionError(null);
+    try {
+      await ensureTenantSession();
+      const supabase = getSupabaseClient();
+      const { error } = await supabase.from('classrooms').delete().eq('id', classroomId);
+      if (error) throw error;
+      onBack();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not delete class.');
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -85,7 +185,7 @@ export default function ManageClassPage({ onScan, onBooksClick, onBack }: Props)
           <div className="mt-lg flex items-start justify-between">
             <div>
               <h1 className="text-2xl font-semibold text-ink-primary">Manage Class</h1>
-              <p className="mt-xs text-sm text-ink-muted">Manage this class's student roster.</p>
+              <p className="mt-xs text-sm text-ink-muted">Manage {classroomLabel}'s student roster.</p>
             </div>
             <button
               type="button"
@@ -100,38 +200,46 @@ export default function ManageClassPage({ onScan, onBooksClick, onBack }: Props)
             <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Students</p>
             <button
               type="button"
-              onClick={openAdd}
+              onClick={() => setModal({ type: 'add' })}
               className="inline-flex min-h-[44px] items-center rounded-sm border border-line bg-surface px-md text-sm font-medium text-ink-primary transition-opacity hover:opacity-80"
             >
               + Add Student
             </button>
           </div>
 
-          <div className="mt-lg grid grid-cols-1 gap-lg sm:grid-cols-2 lg:grid-cols-3">
-            {students.map((name, index) => (
-              <div key={index} className="flex flex-col gap-md rounded-md border border-line bg-surface p-lg shadow-sm">
-                <p className="text-lg font-medium text-ink-primary">{name}</p>
-                <div className="flex flex-wrap gap-sm">
-                  <button
-                    type="button"
-                    onClick={() => openEdit(index)}
-                    className="inline-flex min-h-[44px] items-center rounded-sm border border-line bg-surface px-md text-sm font-medium text-ink-primary transition-opacity hover:opacity-80"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setModal({ type: 'remove', index })}
-                    className="inline-flex min-h-[44px] items-center rounded-sm border border-line bg-surface px-md text-sm font-medium text-rose-700 transition-opacity hover:opacity-80"
-                  >
-                    Remove
-                  </button>
-                </div>
-              </div>
-            ))}
+          {isLoading && <p className="mt-lg text-sm text-ink-muted">Loading students…</p>}
+          {loadError && <p className="mt-lg text-sm text-red-600">{loadError}</p>}
 
-            {students.length === 0 && <p className="text-sm text-ink-muted">No students in this class yet.</p>}
-          </div>
+          {!isLoading && !loadError && (
+            <div className="mt-lg grid grid-cols-1 gap-lg sm:grid-cols-2 lg:grid-cols-3">
+              {students!.map((student) => (
+                <div key={student.id} className="flex flex-col gap-md rounded-md border border-line bg-surface p-lg shadow-sm">
+                  <p className="text-lg font-medium text-ink-primary">{formatName(student)}</p>
+                  <div className="flex flex-wrap gap-sm">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNameInput(formatName(student));
+                        setModal({ type: 'edit', student });
+                      }}
+                      className="inline-flex min-h-[44px] items-center rounded-sm border border-line bg-surface px-md text-sm font-medium text-ink-primary transition-opacity hover:opacity-80"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setModal({ type: 'remove', student })}
+                      className="inline-flex min-h-[44px] items-center rounded-sm border border-line bg-surface px-md text-sm font-medium text-rose-700 transition-opacity hover:opacity-80"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {students!.length === 0 && <p className="text-sm text-ink-muted">No students in this class yet.</p>}
+            </div>
+          )}
         </div>
       </main>
 
@@ -147,12 +255,13 @@ export default function ManageClassPage({ onScan, onBooksClick, onBack }: Props)
             placeholder="Student name"
             className="mt-md w-full rounded-sm border border-line bg-surface-subtle px-md py-sm text-sm text-ink-primary placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-ink-primary/20"
           />
+          {actionError && <p className="mt-sm text-sm text-red-600">{actionError}</p>}
           <div className="mt-lg flex justify-end gap-sm">
-            <button type="button" onClick={closeModal} className="inline-flex min-h-[44px] items-center rounded-sm border border-line bg-surface px-md text-sm font-medium text-ink-primary">
+            <button type="button" onClick={closeModal} disabled={isSubmitting} className="inline-flex min-h-[44px] items-center rounded-sm border border-line bg-surface px-md text-sm font-medium text-ink-primary disabled:opacity-60">
               Cancel
             </button>
-            <button type="button" onClick={handleAdd} className="inline-flex min-h-[44px] items-center rounded-sm bg-ink-primary px-md text-sm font-medium text-white">
-              Add Student
+            <button type="button" onClick={handleAdd} disabled={isSubmitting} className="inline-flex min-h-[44px] items-center rounded-sm bg-ink-primary px-md text-sm font-medium text-white disabled:opacity-60">
+              {isSubmitting ? 'Adding…' : 'Add Student'}
             </button>
           </div>
         </Modal>
@@ -170,12 +279,13 @@ export default function ManageClassPage({ onScan, onBooksClick, onBack }: Props)
             placeholder="Student name"
             className="mt-md w-full rounded-sm border border-line bg-surface-subtle px-md py-sm text-sm text-ink-primary placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-ink-primary/20"
           />
+          {actionError && <p className="mt-sm text-sm text-red-600">{actionError}</p>}
           <div className="mt-lg flex justify-end gap-sm">
-            <button type="button" onClick={closeModal} className="inline-flex min-h-[44px] items-center rounded-sm border border-line bg-surface px-md text-sm font-medium text-ink-primary">
+            <button type="button" onClick={closeModal} disabled={isSubmitting} className="inline-flex min-h-[44px] items-center rounded-sm border border-line bg-surface px-md text-sm font-medium text-ink-primary disabled:opacity-60">
               Cancel
             </button>
-            <button type="button" onClick={handleSaveEdit} className="inline-flex min-h-[44px] items-center rounded-sm bg-ink-primary px-md text-sm font-medium text-white">
-              Save
+            <button type="button" onClick={handleSaveEdit} disabled={isSubmitting} className="inline-flex min-h-[44px] items-center rounded-sm bg-ink-primary px-md text-sm font-medium text-white disabled:opacity-60">
+              {isSubmitting ? 'Saving…' : 'Save'}
             </button>
           </div>
         </Modal>
@@ -184,15 +294,14 @@ export default function ManageClassPage({ onScan, onBooksClick, onBack }: Props)
       {modal?.type === 'remove' && (
         <Modal>
           <h2 className="text-lg font-semibold text-ink-primary">Remove Student?</h2>
-          <p className="mt-xs text-sm text-ink-muted">
-            {students[modal.index]} will be removed from this class's roster.
-          </p>
+          <p className="mt-xs text-sm text-ink-muted">{formatName(modal.student)} will be removed from this class's roster.</p>
+          {actionError && <p className="mt-sm text-sm text-red-600">{actionError}</p>}
           <div className="mt-lg flex justify-end gap-sm">
-            <button type="button" onClick={closeModal} className="inline-flex min-h-[44px] items-center rounded-sm border border-line bg-surface px-md text-sm font-medium text-ink-primary">
+            <button type="button" onClick={closeModal} disabled={isSubmitting} className="inline-flex min-h-[44px] items-center rounded-sm border border-line bg-surface px-md text-sm font-medium text-ink-primary disabled:opacity-60">
               Cancel
             </button>
-            <button type="button" onClick={handleRemove} className="inline-flex min-h-[44px] items-center rounded-sm border border-rose-300 bg-surface px-md text-sm font-medium text-rose-700">
-              Remove Student
+            <button type="button" onClick={handleRemove} disabled={isSubmitting} className="inline-flex min-h-[44px] items-center rounded-sm border border-rose-300 bg-surface px-md text-sm font-medium text-rose-700 disabled:opacity-60">
+              {isSubmitting ? 'Removing…' : 'Remove Student'}
             </button>
           </div>
         </Modal>
@@ -202,12 +311,13 @@ export default function ManageClassPage({ onScan, onBooksClick, onBack }: Props)
         <Modal>
           <h2 className="text-lg font-semibold text-ink-primary">Delete Class?</h2>
           <p className="mt-xs text-sm text-ink-muted">This will permanently delete the class, its roster, and its loan history.</p>
+          {actionError && <p className="mt-sm text-sm text-red-600">{actionError}</p>}
           <div className="mt-lg flex justify-end gap-sm">
-            <button type="button" onClick={closeModal} className="inline-flex min-h-[44px] items-center rounded-sm border border-line bg-surface px-md text-sm font-medium text-ink-primary">
+            <button type="button" onClick={closeModal} disabled={isSubmitting} className="inline-flex min-h-[44px] items-center rounded-sm border border-line bg-surface px-md text-sm font-medium text-ink-primary disabled:opacity-60">
               Cancel
             </button>
-            <button type="button" onClick={onBack} className="inline-flex min-h-[44px] items-center rounded-sm border border-rose-300 bg-surface px-md text-sm font-medium text-rose-700">
-              Delete Class
+            <button type="button" onClick={handleDeleteClass} disabled={isSubmitting} className="inline-flex min-h-[44px] items-center rounded-sm border border-rose-300 bg-surface px-md text-sm font-medium text-rose-700 disabled:opacity-60">
+              {isSubmitting ? 'Deleting…' : 'Delete Class'}
             </button>
           </div>
         </Modal>

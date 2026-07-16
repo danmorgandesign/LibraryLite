@@ -1,33 +1,15 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Header from '../components/layout/Header';
+import { ensureTenantSession, getSupabaseClient } from '../lib/supabaseClient';
 
 type BookStatus = 'available' | 'on-loan';
 
 type Book = {
+  id: string;
   title: string;
-  author: string;
+  author: string | null;
   status: BookStatus;
 };
-
-// Placeholder catalogue — matches the Figma "09 Books" table content until
-// this reads from the real `books`/`loans` tables (see ScanBookPage).
-const DUMMY_BOOKS: Book[] = [
-  { title: 'To Kill a Mockingbird', author: 'Harper Lee', status: 'available' },
-  { title: '1984', author: 'George Orwell', status: 'on-loan' },
-  { title: 'Pride and Prejudice', author: 'Jane Austen', status: 'available' },
-  { title: 'The Great Gatsby', author: 'F. Scott Fitzgerald', status: 'available' },
-  { title: 'Moby-Dick', author: 'Herman Melville', status: 'on-loan' },
-  { title: 'War and Peace', author: 'Leo Tolstoy', status: 'available' },
-  { title: 'The Catcher in the Rye', author: 'J.D. Salinger', status: 'on-loan' },
-  { title: 'Brave New World', author: 'Aldous Huxley', status: 'available' },
-  { title: 'The Hobbit', author: 'J.R.R. Tolkien', status: 'available' },
-  { title: 'Crime and Punishment', author: 'Fyodor Dostoevsky', status: 'on-loan' },
-  { title: 'The Lord of the Rings', author: 'J.R.R. Tolkien', status: 'available' },
-  { title: 'Jane Eyre', author: 'Charlotte Brontë', status: 'on-loan' },
-  { title: 'Wuthering Heights', author: 'Emily Brontë', status: 'available' },
-  { title: 'The Odyssey', author: 'Homer', status: 'available' },
-  { title: 'Frankenstein', author: 'Mary Shelley', status: 'on-loan' },
-];
 
 const PAGE_SIZE = 10;
 
@@ -54,18 +36,58 @@ function StatusBadge({ status }: { status: BookStatus }) {
   );
 }
 
+async function fetchBooks(): Promise<Book[]> {
+  await ensureTenantSession();
+  const supabase = getSupabaseClient();
+
+  // Embedded resource query: pulls each book's active (unreturned) loans
+  // alongside it in one round trip, so status can be derived client-side
+  // without an N+1 query per row.
+  const { data, error } = await supabase
+    .from('books')
+    .select('id, title, author, loans(id, returned_at)')
+    .order('title');
+
+  if (error) throw error;
+
+  return data.map((book) => ({
+    id: book.id,
+    title: book.title,
+    author: book.author,
+    status: book.loans.some((loan) => loan.returned_at === null) ? 'on-loan' : 'available',
+  }));
+}
+
 type Props = {
   onScan: () => void;
   onClassesClick: () => void;
 };
 
 export default function BooksPage({ onScan, onClassesClick }: Props) {
+  const [books, setBooks] = useState<Book[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterKey>('all');
   const [page, setPage] = useState(1);
 
+  useEffect(() => {
+    let cancelled = false;
+    fetchBooks()
+      .then((data) => {
+        if (!cancelled) setBooks(data);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Could not load books.');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const isLoading = books === null && !error;
+
   const filteredBooks = useMemo(
-    () => (filter === 'all' ? DUMMY_BOOKS : DUMMY_BOOKS.filter((book) => book.status === filter)),
-    [filter],
+    () => (books ?? []).filter((book) => filter === 'all' || book.status === filter),
+    [books, filter],
   );
 
   const pageCount = Math.max(1, Math.ceil(filteredBooks.length / PAGE_SIZE));
@@ -109,22 +131,29 @@ export default function BooksPage({ onScan, onClassesClick }: Props) {
               <span>Status</span>
             </div>
 
-            {visibleBooks.map((book) => (
-              <div
-                key={book.title}
-                className={`flex items-center gap-lg border-b border-line py-sm sm:grid ${TABLE_GRID_COLS}`}
-              >
-                <div className="h-[34px] w-[51px] shrink-0 rounded-sm bg-surface-subtle" aria-hidden="true" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-ink-primary">{book.title}</p>
-                  <p className="truncate text-sm text-ink-muted sm:hidden">{book.author}</p>
-                </div>
-                <p className="hidden min-w-0 truncate text-sm text-ink-muted sm:block">{book.author}</p>
-                <StatusBadge status={book.status} />
-              </div>
-            ))}
+            {isLoading && <p className="py-lg text-sm text-ink-muted">Loading books…</p>}
+            {error && <p className="py-lg text-sm text-red-600">{error}</p>}
 
-            {visibleBooks.length === 0 && <p className="py-lg text-sm text-ink-muted">No books match this filter.</p>}
+            {!isLoading &&
+              !error &&
+              visibleBooks.map((book) => (
+                <div
+                  key={book.id}
+                  className={`flex items-center gap-lg border-b border-line py-sm sm:grid ${TABLE_GRID_COLS}`}
+                >
+                  <div className="h-[34px] w-[51px] shrink-0 rounded-sm bg-surface-subtle" aria-hidden="true" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-ink-primary">{book.title}</p>
+                    <p className="truncate text-sm text-ink-muted sm:hidden">{book.author}</p>
+                  </div>
+                  <p className="hidden min-w-0 truncate text-sm text-ink-muted sm:block">{book.author}</p>
+                  <StatusBadge status={book.status} />
+                </div>
+              ))}
+
+            {!isLoading && !error && visibleBooks.length === 0 && (
+              <p className="py-lg text-sm text-ink-muted">No books match this filter.</p>
+            )}
           </div>
 
           <div className="mt-md flex items-center justify-between text-sm text-ink-muted">
