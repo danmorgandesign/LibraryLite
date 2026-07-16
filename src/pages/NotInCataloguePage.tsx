@@ -5,8 +5,9 @@ type Props = {
   coverUrl: string | null;
   isAdding: boolean;
   error: string | null;
-  onAddToCatalogue: () => void;
-  onNotNow: () => void;
+  onAddAndLoan: () => void;
+  onAddAndScanAnother: () => void;
+  onCancel: () => void;
 };
 
 export default function NotInCataloguePage({
@@ -16,8 +17,9 @@ export default function NotInCataloguePage({
   coverUrl,
   isAdding,
   error,
-  onAddToCatalogue,
-  onNotNow,
+  onAddAndLoan,
+  onAddAndScanAnother,
+  onCancel,
 }: Props) {
   return (
     <div className="fixed inset-0 flex flex-col overflow-y-auto p-lg lg:flex-row lg:items-start lg:gap-lg lg:overflow-hidden">
@@ -48,19 +50,27 @@ export default function NotInCataloguePage({
           {error && <p className="text-sm text-red-600">{error}</p>}
           <button
             type="button"
-            onClick={onAddToCatalogue}
+            onClick={onAddAndLoan}
             disabled={isAdding}
             className="inline-flex min-h-[44px] w-full items-center justify-center rounded-sm bg-accent px-lg py-sm text-base font-medium text-ink-primary transition-opacity hover:opacity-90 disabled:opacity-60"
           >
-            {isAdding ? 'Adding…' : 'Add to catalogue'}
+            {isAdding ? 'Adding…' : 'Add & Loan Book'}
           </button>
           <button
             type="button"
-            onClick={onNotNow}
+            onClick={onAddAndScanAnother}
             disabled={isAdding}
             className="inline-flex min-h-[44px] w-full items-center justify-center rounded-sm border border-line bg-white px-lg py-sm text-base font-medium text-ink-primary disabled:opacity-60"
           >
-            Not now
+            Add & Scan Another
+          </button>
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={isAdding}
+            className="inline-flex min-h-[44px] w-full items-center justify-center text-sm font-medium text-ink-muted disabled:opacity-60"
+          >
+            Cancel
           </button>
         </div>
       </div>

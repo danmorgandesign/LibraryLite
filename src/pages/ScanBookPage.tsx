@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { BarcodeDetector } from 'barcode-detector/ponyfill';
 import { ensureTenantSession, getSupabaseClient, getTenantSchoolId } from '../lib/supabaseClient';
+import ConfirmationScreen from '../components/ConfirmationScreen';
 import NotInCataloguePage from './NotInCataloguePage';
+import SelectClassAndStudentPage from './SelectClassAndStudentPage';
 
 type CameraStatus = 'requesting' | 'active' | 'error';
 
@@ -13,6 +15,9 @@ type ScanResult =
   | { status: 'not-in-catalogue'; barcode: string; title: string | null; author: string | null; coverUrl: string | null }
   | { status: 'available'; book: Book }
   | { status: 'on-loan'; book: Book }
+  | { status: 'selecting-student'; book: Book }
+  | { status: 'loaned'; book: Book }
+  | { status: 'returned'; book: Book }
   | { status: 'lookup-error'; message: string };
 
 const SCAN_INTERVAL_MS = 350;
@@ -94,12 +99,42 @@ async function addBookToCatalogue(params: {
   return data;
 }
 
+async function createLoan(bookId: string, studentId: string): Promise<void> {
+  const supabase = getSupabaseClient();
+  await ensureTenantSession();
+
+  const { error } = await supabase.from('loans').insert({
+    school_id: getTenantSchoolId(),
+    book_id: bookId,
+    student_id: studentId,
+  });
+
+  if (error) throw error;
+}
+
+async function returnLoan(bookId: string): Promise<void> {
+  const supabase = getSupabaseClient();
+  await ensureTenantSession();
+
+  const { error } = await supabase
+    .from('loans')
+    .update({ returned_at: new Date().toISOString() })
+    .eq('book_id', bookId)
+    .is('returned_at', null);
+
+  if (error) throw error;
+}
+
 export default function ScanBookPage({ onClose }: { onClose: () => void }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [cameraStatus, setCameraStatus] = useState<CameraStatus>('requesting');
   const [scanResult, setScanResult] = useState<ScanResult>({ status: 'scanning' });
   const [isAddingToCatalogue, setIsAddingToCatalogue] = useState(false);
   const [addToCatalogueError, setAddToCatalogueError] = useState<string | null>(null);
+  const [isLoaning, setIsLoaning] = useState(false);
+  const [loanError, setLoanError] = useState<string | null>(null);
+  const [isReturning, setIsReturning] = useState(false);
+  const [returnError, setReturnError] = useState<string | null>(null);
 
   useEffect(() => {
     let stream: MediaStream | null = null;
@@ -172,21 +207,75 @@ export default function ScanBookPage({ onClose }: { onClose: () => void }) {
         coverUrl={coverUrl}
         isAdding={isAddingToCatalogue}
         error={addToCatalogueError}
-        onAddToCatalogue={async () => {
+        onAddAndLoan={async () => {
           setIsAddingToCatalogue(true);
           setAddToCatalogueError(null);
           try {
             const book = await addBookToCatalogue({ barcode, title, author, coverUrl });
-            // A book with no loan record is, by definition, available — reuse
-            // the existing "available" result rather than a new screen.
-            setScanResult({ status: 'available', book });
+            setScanResult({ status: 'selecting-student', book });
           } catch (err) {
             setAddToCatalogueError(err instanceof Error ? err.message : 'Could not add this book — try again.');
           } finally {
             setIsAddingToCatalogue(false);
           }
         }}
-        onNotNow={onClose}
+        onAddAndScanAnother={async () => {
+          setIsAddingToCatalogue(true);
+          setAddToCatalogueError(null);
+          try {
+            await addBookToCatalogue({ barcode, title, author, coverUrl });
+            resetScan();
+          } catch (err) {
+            setAddToCatalogueError(err instanceof Error ? err.message : 'Could not add this book — try again.');
+          } finally {
+            setIsAddingToCatalogue(false);
+          }
+        }}
+        onCancel={onClose}
+      />
+    );
+  }
+
+  if (scanResult.status === 'selecting-student') {
+    const { book } = scanResult;
+    return (
+      <SelectClassAndStudentPage
+        bookTitle={book.title}
+        isLoaning={isLoaning}
+        error={loanError}
+        onConfirmLoan={async (studentId) => {
+          setIsLoaning(true);
+          setLoanError(null);
+          try {
+            await createLoan(book.id, studentId);
+            setScanResult({ status: 'loaned', book });
+          } catch (err) {
+            setLoanError(err instanceof Error ? err.message : 'Could not create the loan — try again.');
+          } finally {
+            setIsLoaning(false);
+          }
+        }}
+        onCancel={onClose}
+      />
+    );
+  }
+
+  if (scanResult.status === 'loaned') {
+    return (
+      <ConfirmationScreen
+        heading="Book loaned"
+        subtitle="This book is now checked out."
+        onDone={onClose}
+      />
+    );
+  }
+
+  if (scanResult.status === 'returned') {
+    return (
+      <ConfirmationScreen
+        heading="Book returned"
+        subtitle="This book is back on the shelf."
+        onDone={onClose}
       />
     );
   }
@@ -231,6 +320,13 @@ export default function ScanBookPage({ onClose }: { onClose: () => void }) {
                 <p className="text-base font-medium text-ink-primary">{scanResult.book.title}</p>
                 {scanResult.book.author && <p className="text-sm text-ink-muted">{scanResult.book.author}</p>}
                 <p className="text-sm text-ink-muted">Available to loan.</p>
+                <button
+                  type="button"
+                  onClick={() => setScanResult({ status: 'selecting-student', book: scanResult.book })}
+                  className="mt-xs inline-flex min-h-[44px] items-center rounded-sm bg-accent px-lg py-sm text-sm font-medium text-ink-primary transition-opacity hover:opacity-90"
+                >
+                  Loan this book
+                </button>
               </>
             )}
 
@@ -239,6 +335,26 @@ export default function ScanBookPage({ onClose }: { onClose: () => void }) {
                 <p className="text-base font-medium text-ink-primary">{scanResult.book.title}</p>
                 {scanResult.book.author && <p className="text-sm text-ink-muted">{scanResult.book.author}</p>}
                 <p className="text-sm text-ink-muted">Currently on loan.</p>
+                {returnError && <p className="text-sm text-red-600">{returnError}</p>}
+                <button
+                  type="button"
+                  disabled={isReturning}
+                  onClick={async () => {
+                    setIsReturning(true);
+                    setReturnError(null);
+                    try {
+                      await returnLoan(scanResult.book.id);
+                      setScanResult({ status: 'returned', book: scanResult.book });
+                    } catch (err) {
+                      setReturnError(err instanceof Error ? err.message : 'Could not return this book — try again.');
+                    } finally {
+                      setIsReturning(false);
+                    }
+                  }}
+                  className="mt-xs inline-flex min-h-[44px] items-center rounded-sm bg-accent px-lg py-sm text-sm font-medium text-ink-primary transition-opacity hover:opacity-90 disabled:opacity-60"
+                >
+                  {isReturning ? 'Returning…' : 'Return this book'}
+                </button>
               </>
             )}
 
@@ -248,7 +364,7 @@ export default function ScanBookPage({ onClose }: { onClose: () => void }) {
               <button
                 type="button"
                 onClick={resetScan}
-                className="inline-flex min-h-[44px] items-center rounded-sm bg-accent px-lg py-sm text-sm font-medium text-ink-primary transition-opacity hover:opacity-90"
+                className="inline-flex min-h-[44px] items-center rounded-sm border border-line bg-white px-lg py-sm text-sm font-medium text-ink-primary"
               >
                 Scan Another Book
               </button>
