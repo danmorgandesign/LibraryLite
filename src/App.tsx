@@ -16,10 +16,16 @@ export default function App() {
   const [page, setPage] = useState<Page>('landing');
   const [selectedClassroom, setSelectedClassroom] = useState<Classroom | null>(null);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+  const [studentsFilterClassroomId, setStudentsFilterClassroomId] = useState<string | undefined>(undefined);
 
   const goToStudent = (student: Student) => {
     setSelectedStudent(student);
     setPage('student-detail');
+  };
+
+  const goToStudents = (classroomId?: string) => {
+    setStudentsFilterClassroomId(classroomId);
+    setPage('students');
   };
 
   if (page === 'scan') {
@@ -31,7 +37,7 @@ export default function App() {
       <BooksPage
         onScan={() => setPage('scan')}
         onClassesClick={() => setPage('classes')}
-        onStudentsClick={() => setPage('students')}
+        onStudentsClick={() => goToStudents()}
       />
     );
   }
@@ -41,7 +47,8 @@ export default function App() {
       <ClassesPage
         onScan={() => setPage('scan')}
         onBooksClick={() => setPage('books')}
-        onStudentsClick={() => setPage('students')}
+        onStudentsClick={() => goToStudents()}
+        onClassClick={(classroom) => goToStudents(classroom.id)}
         onManageClass={(classroom) => {
           setSelectedClassroom(classroom);
           setPage('manage-class');
@@ -62,7 +69,7 @@ export default function App() {
         onScan={() => setPage('scan')}
         onBooksClick={() => setPage('books')}
         onClassesClick={() => setPage('classes')}
-        onStudentsClick={() => setPage('students')}
+        onStudentsClick={() => goToStudents()}
         onStudentClick={goToStudent}
         onBack={() => setPage('classes')}
       />
@@ -77,7 +84,7 @@ export default function App() {
         onScan={() => setPage('scan')}
         onBooksClick={() => setPage('books')}
         onClassesClick={() => setPage('classes')}
-        onStudentsClick={() => setPage('students')}
+        onStudentsClick={() => goToStudents()}
         onStudentClick={goToStudent}
         onBack={() => setPage('classes')}
       />
@@ -91,6 +98,7 @@ export default function App() {
         onBooksClick={() => setPage('books')}
         onClassesClick={() => setPage('classes')}
         onStudentClick={goToStudent}
+        initialClassroomId={studentsFilterClassroomId}
       />
     );
   }
@@ -102,7 +110,7 @@ export default function App() {
         onScan={() => setPage('scan')}
         onBooksClick={() => setPage('books')}
         onClassesClick={() => setPage('classes')}
-        onBack={() => setPage('students')}
+        onBack={() => goToStudents()}
       />
     );
   }
@@ -112,7 +120,7 @@ export default function App() {
       onScan={() => setPage('scan')}
       onBooksClick={() => setPage('books')}
       onClassesClick={() => setPage('classes')}
-      onStudentsClick={() => setPage('students')}
+      onStudentsClick={() => goToStudents()}
     />
   );
 }

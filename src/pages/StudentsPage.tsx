@@ -12,6 +12,9 @@ type Props = {
   onBooksClick: () => void;
   onClassesClick: () => void;
   onStudentClick: (student: Student) => void;
+  /** Pre-toggles this class's filter pill on mount (e.g. arriving here by
+   * clicking a class name on the Classes page) — undefined shows everyone. */
+  initialClassroomId?: string;
 };
 
 // The schema has no due_date column — loans are due 3 weeks after they're
@@ -98,11 +101,13 @@ async function fetchStudents(): Promise<StudentRow[]> {
   });
 }
 
-export default function StudentsPage({ onScan, onBooksClick, onClassesClick, onStudentClick }: Props) {
+export default function StudentsPage({ onScan, onBooksClick, onClassesClick, onStudentClick, initialClassroomId }: Props) {
   const [classrooms, setClassrooms] = useState<Classroom[] | null>(null);
   const [students, setStudents] = useState<StudentRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [activeClassroomIds, setActiveClassroomIds] = useState<Set<string>>(new Set());
+  const [activeClassroomIds, setActiveClassroomIds] = useState<Set<string>>(
+    () => new Set(initialClassroomId ? [initialClassroomId] : []),
+  );
   const [sortBy, setSortBy] = useState<SortKey>('alphabet');
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
 

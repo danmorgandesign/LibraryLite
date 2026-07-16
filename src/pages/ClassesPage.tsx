@@ -8,6 +8,7 @@ type Props = {
   onScan: () => void;
   onBooksClick: () => void;
   onStudentsClick: () => void;
+  onClassClick: (classroom: Classroom) => void;
   onManageClass: (classroom: Classroom) => void;
   onViewLoans: (classroom: Classroom) => void;
 };
@@ -34,7 +35,7 @@ async function addClassroom(classLabel: string): Promise<Classroom> {
   return data;
 }
 
-export default function ClassesPage({ onScan, onBooksClick, onStudentsClick, onManageClass, onViewLoans }: Props) {
+export default function ClassesPage({ onScan, onBooksClick, onStudentsClick, onClassClick, onManageClass, onViewLoans }: Props) {
   const [classrooms, setClassrooms] = useState<Classroom[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -99,7 +100,13 @@ export default function ClassesPage({ onScan, onBooksClick, onStudentsClick, onM
                   key={classroom.id}
                   className="flex flex-col gap-md rounded-md border border-line bg-surface p-lg shadow-sm"
                 >
-                  <p className="text-xl font-semibold text-ink-primary">{classroom.class_label}</p>
+                  <button
+                    type="button"
+                    onClick={() => onClassClick(classroom)}
+                    className="w-fit text-left text-xl font-semibold text-ink-primary underline-offset-2 hover:underline"
+                  >
+                    {classroom.class_label}
+                  </button>
                   <div className="flex flex-wrap gap-sm">
                     <button
                       type="button"
