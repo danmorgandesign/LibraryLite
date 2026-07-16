@@ -11,6 +11,7 @@ type Book = {
   author: string | null;
   coverUrl: string | null;
   status: BookStatus;
+  borrower: { name: string; classroomLabel: string } | null;
 };
 
 const PAGE_SIZE = 10;
@@ -42,24 +43,49 @@ async function fetchBooks(): Promise<Book[]> {
   await ensureTenantSession();
   const supabase = getSupabaseClient();
 
-  // Embedded resource query: pulls each book's active (unreturned) loans
-  // alongside it in one round trip, so status can be derived client-side
-  // without an N+1 query per row.
+  // Embedded resource query: pulls each book's active (unreturned) loans,
+  // and each of those loans' borrower + classroom, alongside it in one
+  // round trip, so status/borrower can be derived client-side without an
+  // N+1 query per row.
   const { data, error } = await supabase
     .from('books')
-    .select('id, title, author, cover_url, loans(id, returned_at)')
+    .select('id, title, author, cover_url, loans(id, returned_at, students(first_name, last_initial, classrooms(class_label)))')
     .is('retired_at', null)
     .order('title');
 
   if (error) throw error;
 
-  return data.map((book) => ({
-    id: book.id,
-    title: book.title,
-    author: book.author,
-    coverUrl: book.cover_url,
-    status: book.loans.some((loan) => loan.returned_at === null) ? 'on-loan' : 'available',
-  }));
+  // Supabase's untyped client infers embedded to-one relations as arrays
+  // (it can't see the FK cardinality without generated DB types) — at
+  // runtime these are single objects, so cast rather than fight the types.
+  const rows = data as unknown as Array<{
+    id: string;
+    title: string;
+    author: string | null;
+    cover_url: string | null;
+    loans: Array<{
+      returned_at: string | null;
+      students: { first_name: string; last_initial: string | null; classrooms: { class_label: string } | null } | null;
+    }>;
+  }>;
+
+  return rows.map((book) => {
+    const activeLoan = book.loans.find((loan) => loan.returned_at === null);
+    const student = activeLoan?.students ?? null;
+    return {
+      id: book.id,
+      title: book.title,
+      author: book.author,
+      coverUrl: book.cover_url,
+      status: activeLoan ? ('on-loan' as const) : ('available' as const),
+      borrower: student
+        ? {
+            name: student.last_initial ? `${student.first_name} ${student.last_initial}.` : student.first_name,
+            classroomLabel: student.classrooms?.class_label ?? 'Unknown class',
+          }
+        : null,
+    };
+  });
 }
 
 async function retireBook(bookId: string): Promise<void> {
