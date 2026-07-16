@@ -3,12 +3,13 @@ import Header from '../components/layout/Header';
 type Props = {
   onScan: () => void;
   onBooksClick: () => void;
+  onClassesClick: () => void;
 };
 
-export default function LandingPage({ onScan, onBooksClick }: Props) {
+export default function LandingPage({ onScan, onBooksClick, onClassesClick }: Props) {
   return (
     <>
-      <Header onBooksClick={onBooksClick} />
+      <Header onBooksClick={onBooksClick} onClassesClick={onClassesClick} />
 
       <main className="fixed inset-0 flex items-center justify-center px-lg">
         <button

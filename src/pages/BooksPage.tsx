@@ -54,7 +54,12 @@ function StatusBadge({ status }: { status: BookStatus }) {
   );
 }
 
-export default function BooksPage({ onScan }: { onScan: () => void }) {
+type Props = {
+  onScan: () => void;
+  onClassesClick: () => void;
+};
+
+export default function BooksPage({ onScan, onClassesClick }: Props) {
   const [filter, setFilter] = useState<FilterKey>('all');
   const [page, setPage] = useState(1);
 
@@ -74,7 +79,7 @@ export default function BooksPage({ onScan }: { onScan: () => void }) {
 
   return (
     <>
-      <Header activeItem="books" onScan={onScan} />
+      <Header activeItem="books" onScan={onScan} onClassesClick={onClassesClick} />
 
       <main className="min-h-screen px-lg pb-2xl pt-[104px] lg:px-2xl">
         <div className="mx-auto max-w-5xl">
