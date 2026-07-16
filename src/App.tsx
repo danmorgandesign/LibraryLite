@@ -45,6 +45,7 @@ export default function App() {
         classroomLabel={selectedClassroom.class_label}
         onScan={() => setPage('scan')}
         onBooksClick={() => setPage('books')}
+        onClassesClick={() => setPage('classes')}
         onBack={() => setPage('classes')}
       />
     );
@@ -57,6 +58,7 @@ export default function App() {
         classroomLabel={selectedClassroom.class_label}
         onScan={() => setPage('scan')}
         onBooksClick={() => setPage('books')}
+        onClassesClick={() => setPage('classes')}
         onBack={() => setPage('classes')}
       />
     );

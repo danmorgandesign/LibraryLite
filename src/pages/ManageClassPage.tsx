@@ -7,6 +7,7 @@ type Props = {
   classroomLabel: string;
   onScan: () => void;
   onBooksClick: () => void;
+  onClassesClick: () => void;
   onBack: () => void;
 };
 
@@ -58,7 +59,7 @@ async function fetchStudents(classroomId: string): Promise<Student[]> {
   return data;
 }
 
-export default function ManageClassPage({ classroomId, classroomLabel, onScan, onBooksClick, onBack }: Props) {
+export default function ManageClassPage({ classroomId, classroomLabel, onScan, onBooksClick, onClassesClick, onBack }: Props) {
   const [students, setStudents] = useState<Student[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [modal, setModal] = useState<Modal>(null);
@@ -172,7 +173,7 @@ export default function ManageClassPage({ classroomId, classroomLabel, onScan, o
 
   return (
     <>
-      <Header activeItem="classes" onScan={onScan} onBooksClick={onBooksClick} />
+      <Header activeItem="classes" onScan={onScan} onBooksClick={onBooksClick} onClassesClick={onClassesClick} />
 
       <main className="min-h-screen px-lg pb-2xl pt-[104px] lg:px-2xl">
         <div className="mx-auto max-w-5xl">

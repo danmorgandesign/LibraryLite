@@ -7,6 +7,7 @@ type Props = {
   classroomLabel: string;
   onScan: () => void;
   onBooksClick: () => void;
+  onClassesClick: () => void;
   onBack: () => void;
 };
 
@@ -97,7 +98,7 @@ async function markReturned(loanIds: string[]): Promise<void> {
   if (error) throw error;
 }
 
-export default function ClassLoansPage({ classroomId, classroomLabel, onScan, onBooksClick, onBack }: Props) {
+export default function ClassLoansPage({ classroomId, classroomLabel, onScan, onBooksClick, onClassesClick, onBack }: Props) {
   const [loans, setLoans] = useState<Loan[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -169,7 +170,7 @@ export default function ClassLoansPage({ classroomId, classroomLabel, onScan, on
 
   return (
     <>
-      <Header activeItem="classes" onScan={onScan} onBooksClick={onBooksClick} />
+      <Header activeItem="classes" onScan={onScan} onBooksClick={onBooksClick} onClassesClick={onClassesClick} />
 
       <main className="min-h-screen px-lg pb-2xl pt-[104px] lg:px-2xl">
         <div className="mx-auto max-w-5xl">
