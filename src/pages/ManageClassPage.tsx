@@ -10,7 +10,7 @@ type Props = {
   onBack: () => void;
 };
 
-type Student = { id: string; first_name: string; last_initial: string };
+type Student = { id: string; first_name: string; last_initial: string | null };
 
 type Modal =
   | { type: 'add' }
@@ -27,21 +27,23 @@ function Modal({ children }: { children: React.ReactNode }) {
   );
 }
 
-// Students are stored as first_name + last_initial (matches the roster
-// migration's shortcode convention) but the UI takes one "First L." field —
-// split on the last space, and drop a trailing "." from the initial.
-function parseName(input: string): { first_name: string; last_initial: string } | null {
+// First name only is the default — a last initial is optional, added just
+// to disambiguate two children with the same first name in one class.
+// "Ava" -> { first_name: "Ava", last_initial: null }
+// "Ava M." or "Ava M" -> { first_name: "Ava", last_initial: "M" }
+function parseName(input: string): { first_name: string; last_initial: string | null } | null {
   const trimmed = input.trim();
+  if (!trimmed) return null;
   const lastSpace = trimmed.lastIndexOf(' ');
-  if (lastSpace === -1) return null;
+  if (lastSpace === -1) return { first_name: trimmed, last_initial: null };
   const first_name = trimmed.slice(0, lastSpace).trim();
-  const last_initial = trimmed.slice(lastSpace + 1).replace(/\.$/, '').trim();
-  if (!first_name || !last_initial) return null;
+  if (!first_name) return null;
+  const last_initial = trimmed.slice(lastSpace + 1).replace(/\.$/, '').trim().slice(0, 1) || null;
   return { first_name, last_initial };
 }
 
 function formatName(student: Student) {
-  return `${student.first_name} ${student.last_initial}.`;
+  return student.last_initial ? `${student.first_name} ${student.last_initial}.` : student.first_name;
 }
 
 async function fetchStudents(classroomId: string): Promise<Student[]> {
@@ -89,7 +91,7 @@ export default function ManageClassPage({ classroomId, classroomLabel, onScan, o
   const handleAdd = async () => {
     const parsed = parseName(nameInput);
     if (!parsed) {
-      setActionError('Enter a name as "First L." (e.g. "Ava M.").');
+      setActionError('Enter a name for the student.');
       return;
     }
     setIsSubmitting(true);
@@ -116,7 +118,7 @@ export default function ManageClassPage({ classroomId, classroomLabel, onScan, o
     if (modal?.type !== 'edit') return;
     const parsed = parseName(nameInput);
     if (!parsed) {
-      setActionError('Enter a name as "First L." (e.g. "Ava M.").');
+      setActionError('Enter a name for the student.');
       return;
     }
     setIsSubmitting(true);
@@ -252,7 +254,7 @@ export default function ManageClassPage({ classroomId, classroomLabel, onScan, o
             type="text"
             value={nameInput}
             onChange={(e) => setNameInput(e.target.value)}
-            placeholder="Student name"
+            placeholder="First name, or First L. if needed"
             className="mt-md w-full rounded-sm border border-line bg-surface-subtle px-md py-sm text-sm text-ink-primary placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-ink-primary/20"
           />
           {actionError && <p className="mt-sm text-sm text-red-600">{actionError}</p>}
@@ -276,7 +278,7 @@ export default function ManageClassPage({ classroomId, classroomLabel, onScan, o
             type="text"
             value={nameInput}
             onChange={(e) => setNameInput(e.target.value)}
-            placeholder="Student name"
+            placeholder="First name, or First L. if needed"
             className="mt-md w-full rounded-sm border border-line bg-surface-subtle px-md py-sm text-sm text-ink-primary placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-ink-primary/20"
           />
           {actionError && <p className="mt-sm text-sm text-red-600">{actionError}</p>}

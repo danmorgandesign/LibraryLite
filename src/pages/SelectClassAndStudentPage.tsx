@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { ensureTenantSession, getSupabaseClient } from '../lib/supabaseClient';
 
 type Classroom = { id: string; class_label: string };
-type Student = { id: string; first_name: string; last_initial: string };
+type Student = { id: string; first_name: string; last_initial: string | null };
 
 type Props = {
   bookTitle: string;
@@ -101,7 +101,7 @@ export default function SelectClassAndStudentPage({ bookTitle, isLoaning, error,
                   isSelected ? 'border-ink-primary bg-ink-primary text-white' : 'border-line bg-surface text-ink-primary hover:bg-surface-subtle'
                 }`}
               >
-                {s.first_name} {s.last_initial}.
+                {s.last_initial ? `${s.first_name} ${s.last_initial}.` : s.first_name}
               </button>
             );
           })}
