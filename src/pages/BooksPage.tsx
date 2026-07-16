@@ -98,9 +98,10 @@ async function retireBook(bookId: string): Promise<void> {
 type Props = {
   onScan: () => void;
   onClassesClick: () => void;
+  onStudentsClick: () => void;
 };
 
-export default function BooksPage({ onScan, onClassesClick }: Props) {
+export default function BooksPage({ onScan, onClassesClick, onStudentsClick }: Props) {
   const [books, setBooks] = useState<Book[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterKey>('all');
@@ -139,7 +140,7 @@ export default function BooksPage({ onScan, onClassesClick }: Props) {
 
   return (
     <>
-      <Header activeItem="books" onScan={onScan} onClassesClick={onClassesClick} />
+      <Header activeItem="books" onScan={onScan} onClassesClick={onClassesClick} onStudentsClick={onStudentsClick} />
 
       <main className="min-h-screen px-lg pb-2xl pt-[104px] lg:px-2xl">
         <div className="mx-auto max-w-5xl">

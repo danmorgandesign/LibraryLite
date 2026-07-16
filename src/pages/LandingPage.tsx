@@ -4,12 +4,13 @@ type Props = {
   onScan: () => void;
   onBooksClick: () => void;
   onClassesClick: () => void;
+  onStudentsClick: () => void;
 };
 
-export default function LandingPage({ onScan, onBooksClick, onClassesClick }: Props) {
+export default function LandingPage({ onScan, onBooksClick, onClassesClick, onStudentsClick }: Props) {
   return (
     <>
-      <Header onBooksClick={onBooksClick} onClassesClick={onClassesClick} />
+      <Header onBooksClick={onBooksClick} onClassesClick={onClassesClick} onStudentsClick={onStudentsClick} />
 
       <main className="fixed inset-0 flex items-center justify-center px-lg">
         <button

@@ -5,20 +5,35 @@ import ClassLoansPage from './pages/ClassLoansPage';
 import LandingPage from './pages/LandingPage';
 import ManageClassPage from './pages/ManageClassPage';
 import ScanBookPage from './pages/ScanBookPage';
+import StudentsPage from './pages/StudentsPage';
+import StudentDetailPage from './pages/StudentDetailPage';
 
-type Page = 'landing' | 'scan' | 'books' | 'classes' | 'manage-class' | 'class-loans';
+type Page = 'landing' | 'scan' | 'books' | 'classes' | 'manage-class' | 'class-loans' | 'students' | 'student-detail';
 type Classroom = { id: string; class_label: string };
+type Student = { id: string; first_name: string; last_initial: string | null };
 
 export default function App() {
   const [page, setPage] = useState<Page>('landing');
   const [selectedClassroom, setSelectedClassroom] = useState<Classroom | null>(null);
+  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+
+  const goToStudent = (student: Student) => {
+    setSelectedStudent(student);
+    setPage('student-detail');
+  };
 
   if (page === 'scan') {
     return <ScanBookPage onClose={() => setPage('landing')} />;
   }
 
   if (page === 'books') {
-    return <BooksPage onScan={() => setPage('scan')} onClassesClick={() => setPage('classes')} />;
+    return (
+      <BooksPage
+        onScan={() => setPage('scan')}
+        onClassesClick={() => setPage('classes')}
+        onStudentsClick={() => setPage('students')}
+      />
+    );
   }
 
   if (page === 'classes') {
@@ -26,6 +41,7 @@ export default function App() {
       <ClassesPage
         onScan={() => setPage('scan')}
         onBooksClick={() => setPage('books')}
+        onStudentsClick={() => setPage('students')}
         onManageClass={(classroom) => {
           setSelectedClassroom(classroom);
           setPage('manage-class');
@@ -46,6 +62,8 @@ export default function App() {
         onScan={() => setPage('scan')}
         onBooksClick={() => setPage('books')}
         onClassesClick={() => setPage('classes')}
+        onStudentsClick={() => setPage('students')}
+        onStudentClick={goToStudent}
         onBack={() => setPage('classes')}
       />
     );
@@ -59,7 +77,32 @@ export default function App() {
         onScan={() => setPage('scan')}
         onBooksClick={() => setPage('books')}
         onClassesClick={() => setPage('classes')}
+        onStudentsClick={() => setPage('students')}
+        onStudentClick={goToStudent}
         onBack={() => setPage('classes')}
+      />
+    );
+  }
+
+  if (page === 'students') {
+    return (
+      <StudentsPage
+        onScan={() => setPage('scan')}
+        onBooksClick={() => setPage('books')}
+        onClassesClick={() => setPage('classes')}
+        onStudentClick={goToStudent}
+      />
+    );
+  }
+
+  if (page === 'student-detail' && selectedStudent) {
+    return (
+      <StudentDetailPage
+        student={selectedStudent}
+        onScan={() => setPage('scan')}
+        onBooksClick={() => setPage('books')}
+        onClassesClick={() => setPage('classes')}
+        onBack={() => setPage('students')}
       />
     );
   }
@@ -69,6 +112,7 @@ export default function App() {
       onScan={() => setPage('scan')}
       onBooksClick={() => setPage('books')}
       onClassesClick={() => setPage('classes')}
+      onStudentsClick={() => setPage('students')}
     />
   );
 }

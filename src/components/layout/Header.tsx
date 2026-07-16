@@ -1,15 +1,16 @@
 type HeaderProps = {
   /** Highlights this nav item as the current page. */
-  activeItem?: 'books' | 'classes';
+  activeItem?: 'books' | 'classes' | 'students';
   onBooksClick?: () => void;
   onClassesClick?: () => void;
+  onStudentsClick?: () => void;
   /** When provided, renders the "Scan a Book" pill CTA (matches the Figma nav
    * convention for screens other than the landing page, which has its own
    * full-size hero CTA instead). */
   onScan?: () => void;
 };
 
-export default function Header({ activeItem, onBooksClick, onClassesClick, onScan }: HeaderProps) {
+export default function Header({ activeItem, onBooksClick, onClassesClick, onStudentsClick, onScan }: HeaderProps) {
   return (
     <header className="fixed inset-x-0 top-0 z-10 border-b border-line bg-surface/95 backdrop-blur">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-md px-lg py-md lg:flex-nowrap lg:justify-between">
@@ -50,11 +51,21 @@ export default function Header({ activeItem, onBooksClick, onClassesClick, onSca
           >
             Classes
           </button>
+          <button
+            type="button"
+            onClick={onStudentsClick}
+            aria-current={activeItem === 'students' ? 'page' : undefined}
+            className={`inline-flex min-h-[44px] items-center rounded-sm px-sm text-sm font-medium transition-colors hover:bg-surface-subtle hover:text-ink-primary ${
+              activeItem === 'students' ? 'text-ink-primary' : 'text-ink-muted'
+            }`}
+          >
+            Students
+          </button>
           {onScan && (
             <button
               type="button"
               onClick={onScan}
-              className="inline-flex min-h-[44px] items-center rounded-full border border-line bg-surface px-lg text-sm font-medium text-ink-primary transition-opacity hover:opacity-80"
+              className="inline-flex min-h-[44px] items-center rounded-full bg-accent px-lg text-sm font-medium text-ink-primary transition-opacity hover:opacity-90"
             >
               Scan a Book
             </button>

@@ -2,16 +2,18 @@ import { useEffect, useState } from 'react';
 import Header from '../components/layout/Header';
 import { ensureTenantSession, getSupabaseClient, getTenantSchoolId } from '../lib/supabaseClient';
 
+type Student = { id: string; first_name: string; last_initial: string | null };
+
 type Props = {
   classroomId: string;
   classroomLabel: string;
   onScan: () => void;
   onBooksClick: () => void;
   onClassesClick: () => void;
+  onStudentsClick: () => void;
+  onStudentClick: (student: Student) => void;
   onBack: () => void;
 };
-
-type Student = { id: string; first_name: string; last_initial: string | null };
 
 type Modal =
   | { type: 'add' }
@@ -60,7 +62,7 @@ async function fetchStudents(classroomId: string): Promise<Student[]> {
   return data;
 }
 
-export default function ManageClassPage({ classroomId, classroomLabel: initialClassroomLabel, onScan, onBooksClick, onClassesClick, onBack }: Props) {
+export default function ManageClassPage({ classroomId, classroomLabel: initialClassroomLabel, onScan, onBooksClick, onClassesClick, onStudentsClick, onStudentClick, onBack }: Props) {
   const [classroomLabel, setClassroomLabel] = useState(initialClassroomLabel);
   const [students, setStudents] = useState<Student[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -212,7 +214,7 @@ export default function ManageClassPage({ classroomId, classroomLabel: initialCl
 
   return (
     <>
-      <Header activeItem="classes" onScan={onScan} onBooksClick={onBooksClick} onClassesClick={onClassesClick} />
+      <Header activeItem="classes" onScan={onScan} onBooksClick={onBooksClick} onClassesClick={onClassesClick} onStudentsClick={onStudentsClick} />
 
       <main className="min-h-screen px-lg pb-2xl pt-[104px] lg:px-2xl">
         <div className="mx-auto max-w-5xl">
@@ -269,7 +271,13 @@ export default function ManageClassPage({ classroomId, classroomLabel: initialCl
             <div className="mt-lg grid grid-cols-1 gap-lg sm:grid-cols-2 lg:grid-cols-3">
               {students!.map((student) => (
                 <div key={student.id} className="flex flex-col gap-md rounded-md border border-line bg-surface p-lg shadow-sm">
-                  <p className="text-lg font-medium text-ink-primary">{formatName(student)}</p>
+                  <button
+                    type="button"
+                    onClick={() => onStudentClick(student)}
+                    className="w-fit text-left text-lg font-medium text-ink-primary underline-offset-2 hover:underline"
+                  >
+                    {formatName(student)}
+                  </button>
                   <div className="flex flex-wrap gap-sm">
                     <button
                       type="button"

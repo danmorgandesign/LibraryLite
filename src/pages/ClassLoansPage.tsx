@@ -2,12 +2,16 @@ import { useEffect, useMemo, useState } from 'react';
 import Header from '../components/layout/Header';
 import { ensureTenantSession, getSupabaseClient } from '../lib/supabaseClient';
 
+type Student = { id: string; first_name: string; last_initial: string | null };
+
 type Props = {
   classroomId: string;
   classroomLabel: string;
   onScan: () => void;
   onBooksClick: () => void;
   onClassesClick: () => void;
+  onStudentsClick: () => void;
+  onStudentClick: (student: Student) => void;
   onBack: () => void;
 };
 
@@ -17,6 +21,7 @@ type Loan = {
   id: string;
   bookId: string;
   title: string;
+  student: Student;
   borrowedBy: string;
   dueDate: Date;
   status: LoanStatus;
@@ -59,7 +64,7 @@ async function fetchActiveLoans(classroomId: string): Promise<Loan[]> {
 
   const { data, error } = await supabase
     .from('loans')
-    .select('id, loaned_at, book_id, books(title), students!inner(first_name, classroom_id)')
+    .select('id, loaned_at, book_id, books(title), students!inner(id, first_name, last_initial, classroom_id)')
     .eq('students.classroom_id', classroomId)
     .is('returned_at', null);
 
@@ -74,14 +79,16 @@ async function fetchActiveLoans(classroomId: string): Promise<Loan[]> {
     loaned_at: string;
     book_id: string;
     books: { title: string } | null;
-    students: { first_name: string } | null;
+    students: { id: string; first_name: string; last_initial: string | null } | null;
   }>).map((loan) => {
     const dueDate = new Date(new Date(loan.loaned_at).getTime() + LOAN_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+    const student = loan.students ?? { id: '', first_name: 'Unknown student', last_initial: null };
     return {
       id: loan.id,
       bookId: loan.book_id,
       title: loan.books?.title ?? 'Unknown title',
-      borrowedBy: loan.students?.first_name ?? 'Unknown student',
+      student,
+      borrowedBy: student.first_name,
       dueDate,
       status: dueDate.getTime() < now ? 'Overdue' as const : 'On Loan' as const,
     };
@@ -98,7 +105,7 @@ async function markReturned(loanIds: string[]): Promise<void> {
   if (error) throw error;
 }
 
-export default function ClassLoansPage({ classroomId, classroomLabel, onScan, onBooksClick, onClassesClick, onBack }: Props) {
+export default function ClassLoansPage({ classroomId, classroomLabel, onScan, onBooksClick, onClassesClick, onStudentsClick, onStudentClick, onBack }: Props) {
   const [loans, setLoans] = useState<Loan[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -170,7 +177,7 @@ export default function ClassLoansPage({ classroomId, classroomLabel, onScan, on
 
   return (
     <>
-      <Header activeItem="classes" onScan={onScan} onBooksClick={onBooksClick} onClassesClick={onClassesClick} />
+      <Header activeItem="classes" onScan={onScan} onBooksClick={onBooksClick} onClassesClick={onClassesClick} onStudentsClick={onStudentsClick} />
 
       <main className="min-h-screen px-lg pb-2xl pt-[104px] lg:px-2xl">
         <div className="mx-auto max-w-5xl">
@@ -260,7 +267,13 @@ export default function ClassLoansPage({ classroomId, classroomLabel, onScan, on
                     className="size-4"
                   />
                   <p className="truncate text-sm font-medium text-ink-primary">{loan.title}</p>
-                  <p className="truncate text-sm text-ink-muted">{loan.borrowedBy}</p>
+                  <button
+                    type="button"
+                    onClick={() => onStudentClick(loan.student)}
+                    className="truncate text-left text-sm text-ink-muted underline-offset-2 hover:underline"
+                  >
+                    {loan.borrowedBy}
+                  </button>
                   <p className="text-sm text-ink-muted">{formatDate(loan.dueDate)}</p>
                   <StatusBadge status={loan.status} />
                   <button

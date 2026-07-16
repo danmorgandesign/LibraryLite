@@ -7,6 +7,7 @@ type Classroom = { id: string; class_label: string };
 type Props = {
   onScan: () => void;
   onBooksClick: () => void;
+  onStudentsClick: () => void;
   onManageClass: (classroom: Classroom) => void;
   onViewLoans: (classroom: Classroom) => void;
 };
@@ -33,7 +34,7 @@ async function addClassroom(classLabel: string): Promise<Classroom> {
   return data;
 }
 
-export default function ClassesPage({ onScan, onBooksClick, onManageClass, onViewLoans }: Props) {
+export default function ClassesPage({ onScan, onBooksClick, onStudentsClick, onManageClass, onViewLoans }: Props) {
   const [classrooms, setClassrooms] = useState<Classroom[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -73,7 +74,7 @@ export default function ClassesPage({ onScan, onBooksClick, onManageClass, onVie
 
   return (
     <>
-      <Header activeItem="classes" onScan={onScan} onBooksClick={onBooksClick} />
+      <Header activeItem="classes" onScan={onScan} onBooksClick={onBooksClick} onStudentsClick={onStudentsClick} />
 
       <main className="min-h-screen px-lg pb-2xl pt-[104px] lg:px-2xl">
         <div className="mx-auto max-w-5xl">
