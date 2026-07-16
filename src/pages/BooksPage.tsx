@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import Header from '../components/layout/Header';
+import BookDetailModal from '../components/BookDetailModal';
 import { ensureTenantSession, getSupabaseClient } from '../lib/supabaseClient';
 
 type BookStatus = 'available' | 'on-loan';
@@ -8,6 +9,7 @@ type Book = {
   id: string;
   title: string;
   author: string | null;
+  coverUrl: string | null;
   status: BookStatus;
 };
 
@@ -45,7 +47,8 @@ async function fetchBooks(): Promise<Book[]> {
   // without an N+1 query per row.
   const { data, error } = await supabase
     .from('books')
-    .select('id, title, author, loans(id, returned_at)')
+    .select('id, title, author, cover_url, loans(id, returned_at)')
+    .is('retired_at', null)
     .order('title');
 
   if (error) throw error;
@@ -54,8 +57,16 @@ async function fetchBooks(): Promise<Book[]> {
     id: book.id,
     title: book.title,
     author: book.author,
+    coverUrl: book.cover_url,
     status: book.loans.some((loan) => loan.returned_at === null) ? 'on-loan' : 'available',
   }));
+}
+
+async function retireBook(bookId: string): Promise<void> {
+  await ensureTenantSession();
+  const supabase = getSupabaseClient();
+  const { error } = await supabase.from('books').update({ retired_at: new Date().toISOString() }).eq('id', bookId);
+  if (error) throw error;
 }
 
 type Props = {
@@ -68,6 +79,7 @@ export default function BooksPage({ onScan, onClassesClick }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterKey>('all');
   const [page, setPage] = useState(1);
+  const [selectedBook, setSelectedBook] = useState<Book | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -137,18 +149,28 @@ export default function BooksPage({ onScan, onClassesClick }: Props) {
             {!isLoading &&
               !error &&
               visibleBooks.map((book) => (
-                <div
+                <button
                   key={book.id}
-                  className={`flex items-center gap-lg border-b border-line py-sm sm:grid ${TABLE_GRID_COLS}`}
+                  type="button"
+                  onClick={() => setSelectedBook(book)}
+                  className={`flex w-full items-center gap-lg border-b border-line py-sm text-left transition-colors hover:bg-surface-subtle sm:grid ${TABLE_GRID_COLS}`}
                 >
-                  <div className="h-[34px] w-[51px] shrink-0 rounded-sm bg-surface-subtle" aria-hidden="true" />
+                  {book.coverUrl ? (
+                    <img
+                      src={book.coverUrl}
+                      alt=""
+                      className="h-[34px] w-[51px] shrink-0 rounded-sm bg-surface-subtle object-cover"
+                    />
+                  ) : (
+                    <div className="h-[34px] w-[51px] shrink-0 rounded-sm bg-surface-subtle" aria-hidden="true" />
+                  )}
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-ink-primary">{book.title}</p>
                     <p className="truncate text-sm text-ink-muted sm:hidden">{book.author}</p>
                   </div>
                   <p className="hidden min-w-0 truncate text-sm text-ink-muted sm:block">{book.author}</p>
                   <StatusBadge status={book.status} />
-                </div>
+                </button>
               ))}
 
             {!isLoading && !error && visibleBooks.length === 0 && (
@@ -195,6 +217,18 @@ export default function BooksPage({ onScan, onClassesClick }: Props) {
           </div>
         </div>
       </main>
+
+      {selectedBook && (
+        <BookDetailModal
+          book={selectedBook}
+          onClose={() => setSelectedBook(null)}
+          onRetire={async (bookId) => {
+            await retireBook(bookId);
+            setBooks((prev) => (prev ?? []).filter((b) => b.id !== bookId));
+            setSelectedBook(null);
+          }}
+        />
+      )}
     </>
   );
 }
