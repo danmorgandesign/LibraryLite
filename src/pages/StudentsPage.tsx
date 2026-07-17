@@ -214,7 +214,13 @@ export default function StudentsPage({ onScan, onBooksClick, onClassesClick, onS
                   key={student.id}
                   className="grid grid-cols-1 items-center gap-xs border-b border-line py-sm sm:grid-cols-[1fr_1fr_120px_90px] sm:gap-lg"
                 >
-                  <p className="text-sm font-medium text-ink-primary">{formatName(student)}</p>
+                  <button
+                    type="button"
+                    onClick={() => onStudentClick(student)}
+                    className="w-fit text-left text-sm font-medium text-ink-primary underline-offset-2 hover:underline"
+                  >
+                    {formatName(student)}
+                  </button>
                   <p className="text-sm text-ink-muted">{student.classroomLabel}</p>
                   <p className="text-sm text-ink-muted">{student.loanCount}</p>
                   <button
