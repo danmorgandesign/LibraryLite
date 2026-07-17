@@ -3,6 +3,9 @@ import { BarcodeDetector } from 'barcode-detector/ponyfill';
 import { ensureTenantSession, getSupabaseClient, getTenantSchoolId } from '../lib/supabaseClient';
 import ConfirmationScreen from '../components/ConfirmationScreen';
 import NotInCataloguePage from './NotInCataloguePage';
+import BarcodeNotFoundPage from './BarcodeNotFoundPage';
+import EnterBookDetailsPage from './EnterBookDetailsPage';
+import AttachedToBarcodePage from './AttachedToBarcodePage';
 import SelectClassAndStudentPage from './SelectClassAndStudentPage';
 
 type CameraStatus = 'requesting' | 'active' | 'error';
@@ -13,6 +16,8 @@ type ScanResult =
   | { status: 'scanning' }
   | { status: 'looking-up'; barcode: string }
   | { status: 'not-in-catalogue'; barcode: string; title: string | null; author: string | null; coverUrl: string | null }
+  | { status: 'entering-book-details'; barcode: string }
+  | { status: 'attached'; book: Book }
   | { status: 'available'; book: Book }
   | { status: 'on-loan'; book: Book }
   | { status: 'selecting-student'; book: Book }
@@ -199,6 +204,21 @@ export default function ScanBookPage({ onClose }: { onClose: () => void }) {
 
   if (scanResult.status === 'not-in-catalogue') {
     const { barcode, title, author, coverUrl } = scanResult;
+
+    // External lookup found nothing at all (no title) — there's no real data
+    // to confirm, so route to genuine manual entry instead of the "Unknown
+    // book" placeholder this page used to fall back to.
+    if (title === null) {
+      return (
+        <BarcodeNotFoundPage
+          barcode={barcode}
+          onEnterDetails={() => setScanResult({ status: 'entering-book-details', barcode })}
+          onScanAnother={resetScan}
+          onCancel={onClose}
+        />
+      );
+    }
+
     return (
       <NotInCataloguePage
         barcode={barcode}
@@ -232,6 +252,40 @@ export default function ScanBookPage({ onClose }: { onClose: () => void }) {
           }
         }}
         onCancel={onClose}
+      />
+    );
+  }
+
+  if (scanResult.status === 'entering-book-details') {
+    const { barcode } = scanResult;
+    return (
+      <EnterBookDetailsPage
+        isSaving={isAddingToCatalogue}
+        error={addToCatalogueError}
+        onSave={async (title, author) => {
+          setIsAddingToCatalogue(true);
+          setAddToCatalogueError(null);
+          try {
+            const book = await addBookToCatalogue({ barcode, title, author, coverUrl: null });
+            setScanResult({ status: 'attached', book });
+          } catch (err) {
+            setAddToCatalogueError(err instanceof Error ? err.message : 'Could not save this book — try again.');
+          } finally {
+            setIsAddingToCatalogue(false);
+          }
+        }}
+        onCancel={onClose}
+      />
+    );
+  }
+
+  if (scanResult.status === 'attached') {
+    const { book } = scanResult;
+    return (
+      <AttachedToBarcodePage
+        onLoanThisBook={() => setScanResult({ status: 'selecting-student', book })}
+        onScanAnotherBook={resetScan}
+        onHome={onClose}
       />
     );
   }
