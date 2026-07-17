@@ -5,13 +5,15 @@ import { ensureTenantSession, getSupabaseClient } from '../lib/supabaseClient';
 
 type BookStatus = 'available' | 'on-loan';
 
+type Student = { id: string; first_name: string; last_initial: string | null };
+
 type Book = {
   id: string;
   title: string;
   author: string | null;
   coverUrl: string | null;
   status: BookStatus;
-  borrower: { name: string; classroomLabel: string } | null;
+  borrower: (Student & { classroomLabel: string }) | null;
 };
 
 const PAGE_SIZE = 10;
@@ -49,7 +51,7 @@ async function fetchBooks(): Promise<Book[]> {
   // N+1 query per row.
   const { data, error } = await supabase
     .from('books')
-    .select('id, title, author, cover_url, loans(id, returned_at, students(first_name, last_initial, classrooms(class_label)))')
+    .select('id, title, author, cover_url, loans(id, returned_at, students(id, first_name, last_initial, classrooms(class_label)))')
     .is('retired_at', null)
     .order('title');
 
@@ -65,7 +67,7 @@ async function fetchBooks(): Promise<Book[]> {
     cover_url: string | null;
     loans: Array<{
       returned_at: string | null;
-      students: { first_name: string; last_initial: string | null; classrooms: { class_label: string } | null } | null;
+      students: { id: string; first_name: string; last_initial: string | null; classrooms: { class_label: string } | null } | null;
     }>;
   }>;
 
@@ -80,7 +82,9 @@ async function fetchBooks(): Promise<Book[]> {
       status: activeLoan ? ('on-loan' as const) : ('available' as const),
       borrower: student
         ? {
-            name: student.last_initial ? `${student.first_name} ${student.last_initial}.` : student.first_name,
+            id: student.id,
+            first_name: student.first_name,
+            last_initial: student.last_initial,
             classroomLabel: student.classrooms?.class_label ?? 'Unknown class',
           }
         : null,
@@ -99,9 +103,10 @@ type Props = {
   onScan: () => void;
   onClassesClick: () => void;
   onStudentsClick: () => void;
+  onStudentClick: (student: Student) => void;
 };
 
-export default function BooksPage({ onScan, onClassesClick, onStudentsClick }: Props) {
+export default function BooksPage({ onScan, onClassesClick, onStudentsClick, onStudentClick }: Props) {
   const [books, setBooks] = useState<Book[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterKey>('all');
@@ -249,6 +254,7 @@ export default function BooksPage({ onScan, onClassesClick, onStudentsClick }: P
         <BookDetailModal
           book={selectedBook}
           onClose={() => setSelectedBook(null)}
+          onStudentClick={onStudentClick}
           onRetire={async (bookId) => {
             await retireBook(bookId);
             setBooks((prev) => (prev ?? []).filter((b) => b.id !== bookId));

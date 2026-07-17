@@ -2,20 +2,27 @@ import { useState } from 'react';
 
 type BookStatus = 'available' | 'on-loan';
 
+type Student = { id: string; first_name: string; last_initial: string | null };
+
 type Book = {
   id: string;
   title: string;
   author: string | null;
   coverUrl: string | null;
   status: BookStatus;
-  borrower: { name: string; classroomLabel: string } | null;
+  borrower: (Student & { classroomLabel: string }) | null;
 };
 
 type Props = {
   book: Book;
   onClose: () => void;
   onRetire: (bookId: string) => Promise<void>;
+  onStudentClick: (student: Student) => void;
 };
+
+function formatName(student: Student) {
+  return student.last_initial ? `${student.first_name} ${student.last_initial}.` : student.first_name;
+}
 
 function StatusBadge({ status }: { status: BookStatus }) {
   const isAvailable = status === 'available';
@@ -30,7 +37,7 @@ function StatusBadge({ status }: { status: BookStatus }) {
   );
 }
 
-export default function BookDetailModal({ book, onClose, onRetire }: Props) {
+export default function BookDetailModal({ book, onClose, onRetire, onStudentClick }: Props) {
   const [isConfirmingRetire, setIsConfirmingRetire] = useState(false);
   const [isRetiring, setIsRetiring] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -75,8 +82,15 @@ export default function BookDetailModal({ book, onClose, onRetire }: Props) {
             <StatusBadge status={book.status} />
             {book.status === 'on-loan' && book.borrower && (
               <p className="text-sm text-ink-muted">
-                Checked out by <span className="font-medium text-ink-primary">{book.borrower.name}</span> ·{' '}
-                {book.borrower.classroomLabel}
+                Checked out by{' '}
+                <button
+                  type="button"
+                  onClick={() => onStudentClick(book.borrower!)}
+                  className="font-medium text-ink-primary underline-offset-2 hover:underline"
+                >
+                  {formatName(book.borrower)}
+                </button>{' '}
+                · {book.borrower.classroomLabel}
               </p>
             )}
 

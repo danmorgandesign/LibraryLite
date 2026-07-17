@@ -38,6 +38,7 @@ export default function App() {
         onScan={() => setPage('scan')}
         onClassesClick={() => setPage('classes')}
         onStudentsClick={() => goToStudents()}
+        onStudentClick={goToStudent}
       />
     );
   }
