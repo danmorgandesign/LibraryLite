@@ -43,7 +43,7 @@ function StatusBadge({ status }: { status: CurrentLoan['status'] }) {
   return (
     <span
       className={`inline-flex shrink-0 items-center rounded-full border px-md py-xs text-xs font-medium ${
-        isOverdue ? 'border-rose-200 bg-rose-50 text-rose-800' : 'border-amber-200 bg-amber-50 text-amber-800'
+        isOverdue ? 'border-rose-200 bg-rose-50 text-rose-800' : 'border-orange-200 bg-orange-50 text-orange-800'
       }`}
     >
       {status}
