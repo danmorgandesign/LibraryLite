@@ -3,8 +3,18 @@ import Header from '../components/layout/Header';
 import { ensureTenantSession, getSupabaseClient } from '../lib/supabaseClient';
 
 type Student = { id: string; first_name: string; last_initial: string | null };
-type StudentRow = Student & { classroomId: string | null; classroomLabel: string; loanCount: number };
+type StudentRow = Student & {
+  classroomId: string | null;
+  classroomLabel: string;
+  loanCount: number;
+  hasOverdue: boolean;
+};
 type Classroom = { id: string; class_label: string };
+
+// The schema has no due_date column — loans are due 3 weeks after they're
+// checked out (matches the loan window used on Class Loans/Student Detail),
+// so overdue is computed from loaned_at rather than stored.
+const LOAN_WINDOW_DAYS = 21;
 
 type Props = {
   onScan: () => void;
@@ -42,10 +52,12 @@ async function fetchStudents(): Promise<StudentRow[]> {
 
   const { data, error } = await supabase
     .from('students')
-    .select('id, first_name, last_initial, classroom_id, classrooms(class_label), loans(returned_at)')
+    .select('id, first_name, last_initial, classroom_id, classrooms(class_label), loans(returned_at, loaned_at)')
     .order('first_name');
 
   if (error) throw error;
+
+  const now = Date.now();
 
   // Supabase's untyped client infers embedded to-one relations as arrays
   // (it can't see the FK cardinality without generated DB types) — at
@@ -57,15 +69,21 @@ async function fetchStudents(): Promise<StudentRow[]> {
     last_initial: string | null;
     classroom_id: string | null;
     classrooms: { class_label: string } | null;
-    loans: Array<{ returned_at: string | null }>;
-  }>).map((s) => ({
-    id: s.id,
-    first_name: s.first_name,
-    last_initial: s.last_initial,
-    classroomId: s.classroom_id,
-    classroomLabel: s.classrooms?.class_label ?? 'Unassigned',
-    loanCount: s.loans.filter((l) => l.returned_at === null).length,
-  }));
+    loans: Array<{ returned_at: string | null; loaned_at: string }>;
+  }>).map((s) => {
+    const activeLoans = s.loans.filter((l) => l.returned_at === null);
+    return {
+      id: s.id,
+      first_name: s.first_name,
+      last_initial: s.last_initial,
+      classroomId: s.classroom_id,
+      classroomLabel: s.classrooms?.class_label ?? 'Unassigned',
+      loanCount: activeLoans.length,
+      hasOverdue: activeLoans.some(
+        (l) => new Date(l.loaned_at).getTime() + LOAN_WINDOW_DAYS * 24 * 60 * 60 * 1000 < now,
+      ),
+    };
+  });
 }
 
 export default function StudentsPage({ onScan, onBooksClick, onClassesClick, onStudentClick, initialClassroomId }: Props) {
@@ -77,6 +95,7 @@ export default function StudentsPage({ onScan, onBooksClick, onClassesClick, onS
   );
   const [sortBy, setSortBy] = useState<SortKey>('alphabet');
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
+  const [search, setSearch] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -108,10 +127,13 @@ export default function StudentsPage({ onScan, onBooksClick, onClassesClick, onS
 
   const visibleStudents = useMemo(() => {
     if (!students) return [];
-    const filtered =
+    const byClassroom =
       activeClassroomIds.size === 0
         ? students
         : students.filter((s) => s.classroomId && activeClassroomIds.has(s.classroomId));
+
+    const query = search.trim().toLowerCase();
+    const filtered = query ? byClassroom.filter((s) => formatName(s).toLowerCase().includes(query)) : byClassroom;
 
     const sorted = [...filtered];
     sorted.sort((a, b) => {
@@ -126,7 +148,7 @@ export default function StudentsPage({ onScan, onBooksClick, onClassesClick, onS
       return a.first_name.localeCompare(b.first_name);
     });
     return sorted;
-  }, [students, activeClassroomIds, sortBy]);
+  }, [students, activeClassroomIds, sortBy, search]);
 
   const sortLabel = SORT_OPTIONS.find((o) => o.key === sortBy)!.label;
 
@@ -173,6 +195,20 @@ export default function StudentsPage({ onScan, onBooksClick, onClassesClick, onS
             </div>
           </div>
 
+          <div className="mt-lg">
+            <label htmlFor="student-search" className="sr-only">
+              Search students by name
+            </label>
+            <input
+              id="student-search"
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by name…"
+              className="w-full max-w-sm rounded-md border border-line bg-surface px-md py-xs text-sm text-ink-primary placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-ink-primary/20"
+            />
+          </div>
+
           {!isLoading && !error && classrooms && classrooms.length > 0 && (
             <div className="mt-lg flex gap-sm overflow-x-auto pb-xs">
               {classrooms.map((classroom) => {
@@ -197,10 +233,11 @@ export default function StudentsPage({ onScan, onBooksClick, onClassesClick, onS
           )}
 
           <div className="mt-lg">
-            <div className="hidden grid-cols-[1fr_1fr_120px_90px] gap-lg border-b border-line pb-sm text-xs font-semibold uppercase tracking-wide text-ink-muted sm:grid">
+            <div className="hidden grid-cols-[1fr_1fr_120px_80px_90px] gap-lg border-b border-line pb-sm text-xs font-semibold uppercase tracking-wide text-ink-muted sm:grid">
               <span>Name</span>
               <span>Class</span>
               <span>Books on Loan</span>
+              <span>Status</span>
               <span aria-hidden="true" />
             </div>
 
@@ -212,7 +249,7 @@ export default function StudentsPage({ onScan, onBooksClick, onClassesClick, onS
               visibleStudents.map((student) => (
                 <div
                   key={student.id}
-                  className="grid grid-cols-1 items-center gap-xs border-b border-line py-sm sm:grid-cols-[1fr_1fr_120px_90px] sm:gap-lg"
+                  className="grid grid-cols-1 items-center gap-xs border-b border-line py-sm sm:grid-cols-[1fr_1fr_120px_80px_90px] sm:gap-lg"
                 >
                   <button
                     type="button"
@@ -223,6 +260,14 @@ export default function StudentsPage({ onScan, onBooksClick, onClassesClick, onS
                   </button>
                   <p className="text-sm text-ink-muted">{student.classroomLabel}</p>
                   <p className="text-sm text-ink-muted">{student.loanCount}</p>
+                  <span
+                    className={`inline-flex h-3 w-3 shrink-0 rounded-full ${
+                      student.hasOverdue ? 'bg-rose-600' : 'bg-emerald-600'
+                    }`}
+                    title={student.hasOverdue ? 'Has overdue loans' : 'No overdue loans'}
+                  >
+                    <span className="sr-only">{student.hasOverdue ? 'Has overdue loans' : 'No overdue loans'}</span>
+                  </span>
                   <button
                     type="button"
                     onClick={() => onStudentClick(student)}
@@ -235,7 +280,11 @@ export default function StudentsPage({ onScan, onBooksClick, onClassesClick, onS
 
             {!isLoading && !error && visibleStudents.length === 0 && (
               <p className="py-lg text-sm text-ink-muted">
-                {activeClassroomIds.size > 0 ? 'No students in the selected classes.' : 'No students yet.'}
+                {search.trim()
+                  ? 'No students match your search.'
+                  : activeClassroomIds.size > 0
+                    ? 'No students in the selected classes.'
+                    : 'No students yet.'}
               </p>
             )}
           </div>
