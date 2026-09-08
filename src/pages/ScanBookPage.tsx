@@ -124,11 +124,26 @@ async function lookupBarcode(barcode: string): Promise<ScanResult> {
 // turns up, so "not in catalogue" always has a real barcode to attach to.
 async function resolveCoverMatch(originalBarcode: string, title: string, author: string): Promise<ScanResult> {
   const { isbn, coverUrl } = await lookupByTitleAndAuthor(title, author);
-  const resolvedBarcode = isbn ?? originalBarcode;
-  const result = await lookupBarcode(resolvedBarcode);
 
+  if (!isbn) {
+    // Open Library — a real, fuzzy-matching search — found nothing at all
+    // for this title/author. That's the strongest signal available that
+    // the OCR guess isn't a real, reliable read (garbled text, a partial
+    // capture, etc), so this counts as a failed cover scan rather than a
+    // genuine "not in catalogue" book: falling back to the original scanned
+    // barcode here would just relabel that same failure as if it were a
+    // confirmed new book, using unverified text as its title.
+    return { status: 'cover-not-recognized', barcode: originalBarcode };
+  }
+
+  // isbn came back from a genuine Open Library hit — treat it exactly like
+  // a successful barcode scan from here.
+  const result = await lookupBarcode(isbn);
   if (result.status === 'barcode-not-found') {
-    return { status: 'not-in-catalogue', barcode: resolvedBarcode, title, author, coverUrl };
+    // Vanishingly unlikely (the isbn just came from a real search result),
+    // but fall back safely rather than surfacing an inconsistent state if
+    // the external per-ISBN lookup somehow disagrees with the search hit.
+    return { status: 'not-in-catalogue', barcode: isbn, title, author, coverUrl };
   }
   return result;
 }
