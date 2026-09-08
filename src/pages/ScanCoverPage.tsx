@@ -3,11 +3,6 @@ import { getSupabaseClient } from '../lib/supabaseClient';
 
 type CameraStatus = 'requesting' | 'active' | 'error';
 
-// Camera auto-exposure/focus needs a moment to settle after the stream
-// starts, or the captured frame comes out blurry/washed out — this is also
-// what stops the capture from firing the instant the preview appears.
-const CAPTURE_DELAY_MS = 1200;
-
 type AnalyzeCoverResponse = { title: string | null; author: string | null; error?: string };
 
 function captureFrameAsBase64(video: HTMLVideoElement): string | null {
@@ -41,7 +36,6 @@ export default function ScanCoverPage({ onRecognized, onNotRecognized, onClose }
   const videoRef = useRef<HTMLVideoElement>(null);
   const [cameraStatus, setCameraStatus] = useState<CameraStatus>('requesting');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const capturedRef = useRef(false);
 
   useEffect(() => {
     let stream: MediaStream | null = null;
@@ -70,30 +64,26 @@ export default function ScanCoverPage({ onRecognized, onNotRecognized, onClose }
     };
   }, []);
 
-  useEffect(() => {
-    if (cameraStatus !== 'active' || capturedRef.current) return;
-    capturedRef.current = true;
-
-    const timeout = window.setTimeout(async () => {
-      setIsAnalyzing(true);
-      const frame = videoRef.current ? captureFrameAsBase64(videoRef.current) : null;
-      if (!frame) {
-        onNotRecognized();
-        return;
-      }
-      const match = await analyzeCover(frame);
-      if (match) {
-        onRecognized(match.title, match.author);
-      } else {
-        onNotRecognized();
-      }
-    }, CAPTURE_DELAY_MS);
-
-    return () => window.clearTimeout(timeout);
-    // A fresh mount (the caller re-renders this component to retry via
-    // "Try Scanning Cover Again") is how this capture re-runs.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cameraStatus]);
+  // Capturing on a manual tap (rather than an automatic timer) is the whole
+  // fix here: a fixed delay forces the same framing/focus window on every
+  // book regardless of lighting, glare, or how fast the user can get it
+  // steady in frame — the user is a much better judge of "the shot is ready"
+  // than any timeout would be.
+  const handleCapture = async () => {
+    if (!videoRef.current) return;
+    setIsAnalyzing(true);
+    const frame = captureFrameAsBase64(videoRef.current);
+    if (!frame) {
+      onNotRecognized();
+      return;
+    }
+    const match = await analyzeCover(frame);
+    if (match) {
+      onRecognized(match.title, match.author);
+    } else {
+      onNotRecognized();
+    }
+  };
 
   return (
     <div className="fixed inset-0 flex flex-col p-lg">
@@ -108,7 +98,7 @@ export default function ScanCoverPage({ onRecognized, onNotRecognized, onClose }
         </button>
       </div>
 
-      <div className="flex flex-1 flex-col items-center justify-center gap-[64px]">
+      <div className="flex flex-1 flex-col items-center justify-center gap-lg">
         <div className="relative flex h-[400px] w-[300px] max-w-full items-start overflow-hidden rounded-md border border-line bg-surface-subtle p-lg">
           <video
             ref={videoRef}
@@ -129,8 +119,19 @@ export default function ScanCoverPage({ onRecognized, onNotRecognized, onClose }
         <p className="w-[360px] max-w-full text-center text-base text-ink-muted">
           {isAnalyzing
             ? 'Analysing the cover…'
-            : "Hold the book's front cover steady in front of the camera to scan it."}
+            : "Frame the book's front cover clearly, then capture when it's in focus."}
         </p>
+
+        {cameraStatus === 'active' && (
+          <button
+            type="button"
+            onClick={handleCapture}
+            disabled={isAnalyzing}
+            className="inline-flex min-h-[47px] items-center rounded-sm bg-accent px-2xl py-sm text-base font-medium text-ink-primary transition-opacity hover:opacity-90 disabled:opacity-60"
+          >
+            {isAnalyzing ? 'Analysing…' : 'Capture Cover'}
+          </button>
+        )}
       </div>
     </div>
   );
