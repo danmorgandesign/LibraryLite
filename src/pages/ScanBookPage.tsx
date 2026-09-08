@@ -62,7 +62,11 @@ async function lookupExternalBookData(barcode: string): Promise<{ title: string 
 // a barcode scan (check our own catalogue, offer to add it, etc).
 async function lookupByTitleAndAuthor(title: string, author: string): Promise<{ isbn: string | null; coverUrl: string | null }> {
   try {
-    const params = new URLSearchParams({ title, author, limit: '1' });
+    // An empty `author=` param is a filter for authorless books, not "no
+    // filter" — Open Library won't ignore it, so it's only included when we
+    // actually have one (the OCR-derived title guess often doesn't).
+    const params = new URLSearchParams({ title, limit: '1' });
+    if (author) params.set('author', author);
     const res = await fetch(`https://openlibrary.org/search.json?${params.toString()}`);
     if (!res.ok) return { isbn: null, coverUrl: null };
     const data = await res.json();
