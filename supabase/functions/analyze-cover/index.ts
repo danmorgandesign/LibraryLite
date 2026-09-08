@@ -3,10 +3,16 @@
 //
 //   1. OCR (text detection): the title is genuinely printed on the cover,
 //      so reading it directly is a grounded signal — every word came from
-//      pixels actually in the photo. Individual words come back with
-//      bounding boxes; grouping them into lines and taking the tallest line
-//      is a reasonable proxy for "the title", since it's normally the
-//      biggest text on a cover.
+//      pixels actually in the photo. Vision's `fullTextAnnotation` already
+//      groups recognized text into blocks/paragraphs/words using its own
+//      layout analysis (which handles a tilted/skewed real-world photo far
+//      better than re-deriving line grouping from flat word coordinates —
+//      an earlier version of this function did that manually and a few
+//      degrees of camera tilt was enough to fracture one line of the title
+//      into several fragments). The block with the largest *average* word
+//      height is taken as the title — a proxy for "the biggest font on the
+//      cover" that still works when the title wraps across multiple lines,
+//      since every line in that block shares roughly the same font size.
 //   2. Web detection: reverse-image-searches the photo against pages Google
 //      has indexed and returns its own best-guess label for the image. Only
 //      used when there's no legible text at all (e.g. an illustration-only
@@ -43,11 +49,17 @@ const GENERIC_LABELS = new Set([
 ]);
 
 type Vertex = { x?: number; y?: number };
-type TextAnnotation = { description: string; boundingPoly?: { vertices?: Vertex[] } };
+type BoundingPoly = { vertices?: Vertex[] };
+type Symbol_ = { text: string };
+type Word = { boundingBox?: BoundingPoly; symbols?: Symbol_[] };
+type Paragraph = { words?: Word[] };
+type Block = { paragraphs?: Paragraph[] };
+type FullTextAnnotation = { pages?: Array<{ blocks?: Block[] }> };
+
 type VisionResponse = {
   responses?: Array<{
     webDetection?: { bestGuessLabels?: Array<{ label: string }> };
-    textAnnotations?: TextAnnotation[];
+    fullTextAnnotation?: FullTextAnnotation;
   }>;
 };
 
@@ -65,58 +77,40 @@ function parseBestGuess(label: string): { title: string; author: string | null }
   return { title: withoutParenthetical, author: null };
 }
 
-function boxHeightAndCenterY(vertices: Vertex[] | undefined): { height: number; centerY: number } {
-  // Vision omits the x or y key entirely when its value is 0 (not present
-  // as 0) — `v.y ?? 0` fills that back in. Passing a literal 0 into
-  // Math.min/max itself (as opposed to into the per-vertex fallback) would
-  // wrongly floor every box's top edge at 0, since all real coordinates
-  // here are positive.
-  const ys = (vertices ?? []).map((v) => v.y ?? 0);
-  if (ys.length === 0) return { height: 0, centerY: 0 };
-  const minY = Math.min(...ys);
-  const maxY = Math.max(...ys);
-  return { height: maxY - minY, centerY: (minY + maxY) / 2 };
+function wordText(word: Word): string {
+  return (word.symbols ?? []).map((s) => s.text).join('');
 }
 
-function boxCenterX(vertices: Vertex[] | undefined): number {
-  const xs = (vertices ?? []).map((v) => v.x ?? 0);
-  if (xs.length === 0) return 0;
-  return (Math.min(...xs) + Math.max(...xs)) / 2;
+function boxHeight(box: BoundingPoly | undefined): number {
+  const ys = (box?.vertices ?? []).map((v) => v.y ?? 0);
+  if (ys.length === 0) return 0;
+  return Math.max(...ys) - Math.min(...ys);
 }
 
-// Groups individual word/line annotations into rows by vertical proximity,
-// then returns the tallest row's text — a proxy for "the biggest text on
-// the cover", which is normally the title. `textAnnotations[0]` is the full
-// text blob Vision also returns, not an individual word, so it's excluded.
-function guessTitleFromText(textAnnotations: TextAnnotation[]): string | null {
-  const words = textAnnotations.slice(1).map((a) => {
-    const { height, centerY } = boxHeightAndCenterY(a.boundingPoly?.vertices);
-    return { text: a.description, height, centerY, centerX: boxCenterX(a.boundingPoly?.vertices) };
-  });
-  if (words.length === 0) return null;
+function guessTitleFromFullText(fullTextAnnotation: FullTextAnnotation): string | null {
+  const blocks = fullTextAnnotation.pages?.[0]?.blocks ?? [];
 
-  words.sort((a, b) => a.centerY - b.centerY);
+  let best: { text: string; avgHeight: number } | null = null;
 
-  type Row = { words: typeof words; maxHeight: number };
-  const rows: Row[] = [];
-  for (const word of words) {
-    const last = rows[rows.length - 1];
-    if (last && Math.abs(word.centerY - last.words[last.words.length - 1].centerY) < last.maxHeight * 0.7) {
-      last.words.push(word);
-      last.maxHeight = Math.max(last.maxHeight, word.height);
-    } else {
-      rows.push({ words: [word], maxHeight: word.height });
+  for (const block of blocks) {
+    const words = (block.paragraphs ?? []).flatMap((p) => p.words ?? []);
+    if (words.length === 0) continue;
+
+    const heights = words.map((w) => boxHeight(w.boundingBox));
+    const avgHeight = heights.reduce((sum, h) => sum + h, 0) / heights.length;
+
+    const text = (block.paragraphs ?? [])
+      .map((p) => (p.words ?? []).map(wordText).join(' '))
+      .join(' ')
+      .trim();
+    if (!text) continue;
+
+    if (!best || avgHeight > best.avgHeight) {
+      best = { text, avgHeight };
     }
   }
 
-  const tallestRow = rows.reduce((best, row) => (row.maxHeight > best.maxHeight ? row : best));
-  const title = tallestRow.words
-    .sort((a, b) => a.centerX - b.centerX)
-    .map((w) => w.text)
-    .join(' ')
-    .trim();
-
-  return title || null;
+  return best?.text ?? null;
 }
 
 Deno.serve(async (req) => {
@@ -168,7 +162,7 @@ Deno.serve(async (req) => {
     const data: VisionResponse = await visionRes.json();
     const annotation = data.responses?.[0];
 
-    const textTitle = annotation?.textAnnotations ? guessTitleFromText(annotation.textAnnotations) : null;
+    const textTitle = annotation?.fullTextAnnotation ? guessTitleFromFullText(annotation.fullTextAnnotation) : null;
     if (textTitle) {
       return new Response(JSON.stringify({ title: textTitle, author: null }), {
         headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
