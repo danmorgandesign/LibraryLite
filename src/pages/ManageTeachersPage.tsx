@@ -4,7 +4,8 @@ import { ensureTenantSession, getSupabaseClient, getTenantSchoolId } from '../li
 
 type Teacher = {
   id: string;
-  name: string;
+  name: string | null;
+  email: string | null;
   classroomId: string | null;
   classroomLabel: string | null;
   activatedAt: string | null;
@@ -14,7 +15,8 @@ type Classroom = { id: string; class_label: string };
 
 function mapTeacherRow(row: {
   id: string;
-  name: string;
+  name: string | null;
+  email: string | null;
   activated_at: string | null;
   classroom_id: string | null;
   classrooms: { class_label: string } | null;
@@ -22,13 +24,14 @@ function mapTeacherRow(row: {
   return {
     id: row.id,
     name: row.name,
+    email: row.email,
     classroomId: row.classroom_id,
     classroomLabel: row.classrooms?.class_label ?? null,
     activatedAt: row.activated_at,
   };
 }
 
-const TEACHER_SELECT = 'id, name, activated_at, classroom_id, classrooms(class_label)';
+const TEACHER_SELECT = 'id, name, email, activated_at, classroom_id, classrooms(class_label)';
 
 async function fetchTeachers(): Promise<Teacher[]> {
   await ensureTenantSession();
@@ -134,7 +137,9 @@ export default function ManageTeachersPage() {
     setActionError(null);
     try {
       const teacher = await addTeacher(nameInput.trim(), classroomIdInput || null);
-      setTeachers((prev) => [...(prev ?? []), teacher].sort((a, b) => a.name.localeCompare(b.name)));
+      setTeachers((prev) =>
+        [...(prev ?? []), teacher].sort((a, b) => (a.name ?? a.email ?? '').localeCompare(b.name ?? b.email ?? '')),
+      );
       closeModal();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Could not add teacher.');
@@ -195,14 +200,17 @@ export default function ManageTeachersPage() {
             <div className="mt-lg grid grid-cols-1 gap-lg sm:grid-cols-2 lg:grid-cols-3">
               {teachers!.map((teacher) => (
                 <div key={teacher.id} className="flex flex-col gap-xs rounded-md border border-line bg-surface p-lg shadow-sm">
-                  <p className="text-lg font-semibold text-ink-primary">{teacher.name}</p>
+                  <p className="text-lg font-semibold text-ink-primary">
+                    {teacher.name ?? teacher.email ?? 'Unnamed teacher'}
+                  </p>
+                  {teacher.name && teacher.email && <p className="text-sm text-ink-muted">{teacher.email}</p>}
                   {teacher.classroomLabel && <p className="text-sm text-ink-muted">Class: {teacher.classroomLabel}</p>}
                   {!teacher.activatedAt && <p className="text-sm font-medium text-amber-700">Awaiting Activation</p>}
                   <div className="mt-sm flex flex-wrap gap-sm">
                     <button
                       type="button"
                       onClick={() => {
-                        setNameInput(teacher.name);
+                        setNameInput(teacher.name ?? '');
                         setClassroomIdInput(teacher.classroomId ?? '');
                         setModal({ type: 'edit', teacher });
                       }}
