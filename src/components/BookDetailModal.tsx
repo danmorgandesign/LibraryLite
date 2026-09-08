@@ -10,6 +10,7 @@ type Book = {
   author: string | null;
   coverUrl: string | null;
   status: BookStatus;
+  isRetired: boolean;
   borrower: (Student & { classroomLabel: string }) | null;
 };
 
@@ -79,8 +80,14 @@ export default function BookDetailModal({ book, onClose, onRetire, onStudentClic
           <div className="flex max-w-sm flex-col gap-sm">
             <h1 className="text-2xl font-semibold text-ink-primary">{book.title}</h1>
             {book.author && <p className="text-base text-ink-muted">{book.author}</p>}
-            <StatusBadge status={book.status} />
-            {book.status === 'on-loan' && book.borrower && (
+            {book.isRetired ? (
+              <span className="inline-flex w-fit items-center rounded-full border border-line bg-surface-subtle px-md py-xs text-xs font-medium text-ink-muted">
+                RETIRED
+              </span>
+            ) : (
+              <StatusBadge status={book.status} />
+            )}
+            {!book.isRetired && book.status === 'on-loan' && book.borrower && (
               <p className="text-sm text-ink-muted">
                 Checked out by{' '}
                 <button
@@ -96,13 +103,17 @@ export default function BookDetailModal({ book, onClose, onRetire, onStudentClic
 
             <div className="mt-lg">
               {error && <p className="mb-sm text-sm text-red-600">{error}</p>}
-              <button
-                type="button"
-                onClick={() => setIsConfirmingRetire(true)}
-                className="inline-flex min-h-[44px] items-center rounded-sm border border-line bg-surface px-md text-sm font-medium text-rose-700 transition-opacity hover:opacity-80"
-              >
-                Retire Book
-              </button>
+              {book.isRetired ? (
+                <p className="text-sm text-ink-muted">This book has been retired from the active catalogue.</p>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setIsConfirmingRetire(true)}
+                  className="inline-flex min-h-[44px] items-center rounded-sm border border-line bg-surface px-md text-sm font-medium text-rose-700 transition-opacity hover:opacity-80"
+                >
+                  Retire Book
+                </button>
+              )}
             </div>
           </div>
         </div>

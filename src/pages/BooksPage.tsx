@@ -14,6 +14,7 @@ type Book = {
   author: string | null;
   coverUrl: string | null;
   status: BookStatus;
+  isRetired: boolean;
   borrower: (Student & { classroomLabel: string }) | null;
 };
 
@@ -29,7 +30,18 @@ type FilterKey = (typeof FILTERS)[number]['key'];
 
 const TABLE_GRID_COLS = 'sm:grid-cols-[51px_1fr_1fr_110px]';
 
-function StatusBadge({ status }: { status: BookStatus }) {
+function StatusBadge({ status, isRetired }: { status: BookStatus; isRetired: boolean }) {
+  // Retirement is a separate lifecycle flag from loan status, but the two
+  // aren't shown side by side in the table — a retired book's historical
+  // loan status is secondary to the fact that it's no longer in the active
+  // catalogue, so this badge takes over the slot entirely.
+  if (isRetired) {
+    return (
+      <span className="inline-flex shrink-0 items-center justify-self-start rounded-full border border-line bg-surface-subtle px-md py-xs text-xs font-medium text-ink-muted">
+        RETIRED
+      </span>
+    );
+  }
   const isAvailable = status === 'available';
   return (
     <span
@@ -49,11 +61,12 @@ async function fetchBooks(): Promise<Book[]> {
   // Embedded resource query: pulls each book's active (unreturned) loans,
   // and each of those loans' borrower + classroom, alongside it in one
   // round trip, so status/borrower can be derived client-side without an
-  // N+1 query per row.
+  // N+1 query per row. Retired books are included here and filtered
+  // client-side (via the "Include retired books" checkbox) rather than
+  // excluded at the query level, so toggling it doesn't need a re-fetch.
   const { data, error } = await supabase
     .from('books')
-    .select('id, title, author, cover_url, loans(id, returned_at, students(id, first_name, last_initial, classrooms(class_label)))')
-    .is('retired_at', null)
+    .select('id, title, author, cover_url, retired_at, loans(id, returned_at, students(id, first_name, last_initial, classrooms(class_label)))')
     .order('title');
 
   if (error) throw error;
@@ -66,6 +79,7 @@ async function fetchBooks(): Promise<Book[]> {
     title: string;
     author: string | null;
     cover_url: string | null;
+    retired_at: string | null;
     loans: Array<{
       returned_at: string | null;
       students: { id: string; first_name: string; last_initial: string | null; classrooms: { class_label: string } | null } | null;
@@ -81,6 +95,7 @@ async function fetchBooks(): Promise<Book[]> {
       author: book.author,
       coverUrl: book.cover_url,
       status: activeLoan ? ('on-loan' as const) : ('available' as const),
+      isRetired: book.retired_at !== null,
       borrower: student
         ? {
             id: student.id,
@@ -106,6 +121,7 @@ export default function BooksPage() {
   const [books, setBooks] = useState<Book[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterKey>('all');
+  const [includeRetired, setIncludeRetired] = useState(false);
   const [page, setPage] = useState(1);
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
 
@@ -125,9 +141,16 @@ export default function BooksPage() {
 
   const isLoading = books === null && !error;
 
+  // Two independent filters: the pill group narrows by loan status, the
+  // checkbox separately controls whether retired books are in the pool at
+  // all — retiring is a distinct lifecycle concern from being on loan, so
+  // it isn't folded into the same pill group.
   const filteredBooks = useMemo(
-    () => (books ?? []).filter((book) => filter === 'all' || book.status === filter),
-    [books, filter],
+    () =>
+      (books ?? []).filter(
+        (book) => (includeRetired || !book.isRetired) && (filter === 'all' || book.status === filter),
+      ),
+    [books, filter, includeRetired],
   );
 
   const pageCount = Math.max(1, Math.ceil(filteredBooks.length / PAGE_SIZE));
@@ -139,26 +162,43 @@ export default function BooksPage() {
     setPage(1);
   };
 
+  const handleIncludeRetiredChange = (checked: boolean) => {
+    setIncludeRetired(checked);
+    setPage(1);
+  };
+
   return (
     <>
       <Header />
 
       <main className="min-h-screen px-lg pb-2xl pt-[104px] lg:px-2xl">
         <div className="mx-auto max-w-5xl">
-          <div className="inline-flex gap-[3px] rounded-md bg-surface-subtle p-[3px]">
-            {FILTERS.map(({ key, label }) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => handleFilterChange(key)}
-                aria-pressed={filter === key}
-                className={`rounded-sm px-md py-xs text-sm font-medium transition-colors ${
-                  filter === key ? 'bg-white text-ink-primary shadow-sm' : 'text-ink-muted hover:text-ink-primary'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
+          <div className="flex flex-wrap items-center justify-between gap-md">
+            <div className="inline-flex gap-[3px] rounded-md bg-surface-subtle p-[3px]">
+              {FILTERS.map(({ key, label }) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => handleFilterChange(key)}
+                  aria-pressed={filter === key}
+                  className={`rounded-sm px-md py-xs text-sm font-medium transition-colors ${
+                    filter === key ? 'bg-white text-ink-primary shadow-sm' : 'text-ink-muted hover:text-ink-primary'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            <label className="flex items-center gap-sm text-sm text-ink-primary">
+              <input
+                type="checkbox"
+                checked={includeRetired}
+                onChange={(e) => handleIncludeRetiredChange(e.target.checked)}
+                className="size-4"
+              />
+              Include retired books
+            </label>
           </div>
 
           <div className="mt-lg">
@@ -197,7 +237,7 @@ export default function BooksPage() {
                     <p className="truncate text-sm text-ink-muted sm:hidden">{book.author}</p>
                   </div>
                   <p className="hidden min-w-0 truncate text-sm text-ink-muted sm:block">{book.author}</p>
-                  <StatusBadge status={book.status} />
+                  <StatusBadge status={book.status} isRetired={book.isRetired} />
                 </button>
               ))}
 
@@ -253,7 +293,10 @@ export default function BooksPage() {
           onStudentClick={goToStudent}
           onRetire={async (bookId) => {
             await retireBook(bookId);
-            setBooks((prev) => (prev ?? []).filter((b) => b.id !== bookId));
+            // Marked in place rather than removed from `books` — whether it
+            // stays visible now depends on the "Include retired books"
+            // checkbox, not on this action itself.
+            setBooks((prev) => (prev ?? []).map((b) => (b.id === bookId ? { ...b, isRetired: true } : b)));
             setSelectedBook(null);
           }}
         />
