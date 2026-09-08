@@ -35,21 +35,53 @@ type ScanResult =
   | { status: 'lookup-error'; message: string };
 
 const SCAN_INTERVAL_MS = 350;
+const EXTERNAL_LOOKUP_TIMEOUT_MS = 6000;
 
-// Open Library's public book API — free, keyless, used to preview a book's
-// details when it isn't in our own catalogue yet (so "Add to catalogue" has
-// something real to show, not just the raw barcode).
+const GOOGLE_BOOKS_API_KEY = import.meta.env.VITE_GOOGLE_BOOKS_API_KEY;
+
+// A hung external request used to leave the "Looking up…" state stuck
+// indefinitely with no feedback — an outage on the other end shouldn't look
+// identical to the app being broken.
+async function fetchWithTimeout(url: string, timeoutMs = EXTERNAL_LOOKUP_TIMEOUT_MS): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// Google Books sometimes serves cover thumbnails over plain http — the app
+// itself is served over https, so an http image would get silently blocked
+// as mixed content.
+function toHttps(url: string | undefined): string | null {
+  return url ? url.replace(/^http:\/\//, 'https://') : null;
+}
+
+function extractIsbn(identifiers: Array<{ type: string; identifier: string }> | undefined): string | null {
+  return (
+    identifiers?.find((i) => i.type === 'ISBN_13')?.identifier ??
+    identifiers?.find((i) => i.type === 'ISBN_10')?.identifier ??
+    null
+  );
+}
+
+// Google Books' public API — used to preview a book's details when it isn't
+// in our own catalogue yet (so "Add to catalogue" has something real to
+// show, not just the raw barcode).
 async function lookupExternalBookData(barcode: string): Promise<{ title: string | null; author: string | null; coverUrl: string | null }> {
   try {
-    const res = await fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${barcode}&format=json&jscmd=data`);
+    const params = new URLSearchParams({ q: `isbn:${barcode}`, key: GOOGLE_BOOKS_API_KEY });
+    const res = await fetchWithTimeout(`https://www.googleapis.com/books/v1/volumes?${params.toString()}`);
     if (!res.ok) return { title: null, author: null, coverUrl: null };
     const data = await res.json();
-    const entry = data[`ISBN:${barcode}`];
-    if (!entry) return { title: null, author: null, coverUrl: null };
+    const info = data.items?.[0]?.volumeInfo;
+    if (!info) return { title: null, author: null, coverUrl: null };
     return {
-      title: entry.title ?? null,
-      author: entry.authors?.[0]?.name ?? null,
-      coverUrl: entry.cover?.large ?? entry.cover?.medium ?? null,
+      title: info.title ?? null,
+      author: info.authors?.[0] ?? null,
+      coverUrl: toHttps(info.imageLinks?.thumbnail ?? info.imageLinks?.smallThumbnail),
     };
   } catch {
     return { title: null, author: null, coverUrl: null };
@@ -57,28 +89,22 @@ async function lookupExternalBookData(barcode: string): Promise<{ title: string 
 }
 
 // Reverse lookup for the cover-scan path: once we have a title/author (from
-// the cover, not a barcode), search Open Library's catalogue for the
-// matching edition's ISBN, so the rest of the flow can treat it exactly like
-// a barcode scan (check our own catalogue, offer to add it, etc).
+// the cover, not a barcode), search Google Books for the matching edition's
+// ISBN, so the rest of the flow can treat it exactly like a barcode scan
+// (check our own catalogue, offer to add it, etc).
 async function lookupByTitleAndAuthor(title: string, author: string): Promise<{ isbn: string | null; coverUrl: string | null }> {
   try {
-    // An empty `author=` param is a filter for authorless books, not "no
-    // filter" — Open Library won't ignore it, so it's only included when we
-    // actually have one (the OCR-derived title guess often doesn't).
-    const params = new URLSearchParams({ title, limit: '1' });
-    if (author) params.set('author', author);
-    const res = await fetch(`https://openlibrary.org/search.json?${params.toString()}`);
+    const q = author ? `intitle:${title} inauthor:${author}` : `intitle:${title}`;
+    const params = new URLSearchParams({ q, key: GOOGLE_BOOKS_API_KEY });
+    const res = await fetchWithTimeout(`https://www.googleapis.com/books/v1/volumes?${params.toString()}`);
     if (!res.ok) return { isbn: null, coverUrl: null };
     const data = await res.json();
-    const doc = data.docs?.[0];
-    if (!doc) return { isbn: null, coverUrl: null };
-    const isbn: string | null = doc.isbn?.[0] ?? null;
-    const coverUrl = doc.cover_i
-      ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg`
-      : isbn
-        ? `https://covers.openlibrary.org/b/isbn/${isbn}-L.jpg`
-        : null;
-    return { isbn, coverUrl };
+    const info = data.items?.[0]?.volumeInfo;
+    if (!info) return { isbn: null, coverUrl: null };
+    return {
+      isbn: extractIsbn(info.industryIdentifiers),
+      coverUrl: toHttps(info.imageLinks?.thumbnail ?? info.imageLinks?.smallThumbnail),
+    };
   } catch {
     return { isbn: null, coverUrl: null };
   }
