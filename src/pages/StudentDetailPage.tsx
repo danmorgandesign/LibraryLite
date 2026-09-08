@@ -170,15 +170,15 @@ export default function StudentDetailPage() {
               <p className="mt-xl text-xs font-semibold uppercase tracking-wide text-ink-muted">Current Loans</p>
               <div className="mt-sm">
                 {current!.map((loan) => (
-                  <div key={loan.id} className="flex items-center justify-between gap-lg border-b border-line py-sm">
-                    <p className="min-w-0 truncate text-sm font-medium text-ink-primary">{loan.title}</p>
+                  <div key={loan.id} className="flex items-center gap-lg border-b border-line py-xs">
+                    <p className="min-w-0 flex-1 truncate text-sm font-medium text-ink-primary">{loan.title}</p>
                     <p className="shrink-0 text-sm text-ink-muted">Due {formatDate(loan.dueDate)}</p>
                     <StatusBadge status={loan.status} />
                     <button
                       type="button"
                       onClick={() => handleReturn(loan.id)}
                       disabled={returningId === loan.id}
-                      className="inline-flex min-h-[36px] shrink-0 items-center rounded-sm border border-line bg-surface px-md text-sm font-medium text-ink-primary transition-opacity hover:opacity-80 disabled:opacity-60"
+                      className="inline-flex min-h-[44px] shrink-0 items-center rounded-sm border border-line bg-surface px-md text-sm font-medium text-ink-primary transition-opacity hover:opacity-80 disabled:opacity-60"
                     >
                       {returningId === loan.id ? 'Returning…' : 'Return'}
                     </button>
@@ -190,8 +190,8 @@ export default function StudentDetailPage() {
               <p className="mt-xl text-xs font-semibold uppercase tracking-wide text-ink-muted">Loan History</p>
               <div className="mt-sm">
                 {history!.map((loan) => (
-                  <div key={loan.id} className="flex items-center justify-between gap-lg border-b border-line py-sm">
-                    <p className="min-w-0 truncate text-sm font-medium text-ink-primary">{loan.title}</p>
+                  <div key={loan.id} className="flex items-center gap-lg border-b border-line py-xs">
+                    <p className="min-w-0 flex-1 truncate text-sm font-medium text-ink-primary">{loan.title}</p>
                     <p className="shrink-0 text-sm text-ink-muted">Returned {formatDate(loan.returnedAt)}</p>
                   </div>
                 ))}
