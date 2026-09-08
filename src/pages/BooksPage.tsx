@@ -115,6 +115,13 @@ async function retireBook(bookId: string): Promise<void> {
   if (error) throw error;
 }
 
+async function unretireBook(bookId: string): Promise<void> {
+  await ensureTenantSession();
+  const supabase = getSupabaseClient();
+  const { error } = await supabase.from('books').update({ retired_at: null }).eq('id', bookId);
+  if (error) throw error;
+}
+
 export default function BooksPage() {
   const navigate = useNavigate();
   const goToStudent = (student: Student) => navigate(`/students/${student.id}`);
@@ -297,6 +304,11 @@ export default function BooksPage() {
             // stays visible now depends on the "Include retired books"
             // checkbox, not on this action itself.
             setBooks((prev) => (prev ?? []).map((b) => (b.id === bookId ? { ...b, isRetired: true } : b)));
+            setSelectedBook(null);
+          }}
+          onUnretire={async (bookId) => {
+            await unretireBook(bookId);
+            setBooks((prev) => (prev ?? []).map((b) => (b.id === bookId ? { ...b, isRetired: false } : b)));
             setSelectedBook(null);
           }}
         />

@@ -18,6 +18,7 @@ type Props = {
   book: Book;
   onClose: () => void;
   onRetire: (bookId: string) => Promise<void>;
+  onUnretire: (bookId: string) => Promise<void>;
   onStudentClick: (student: Student) => void;
 };
 
@@ -38,9 +39,10 @@ function StatusBadge({ status }: { status: BookStatus }) {
   );
 }
 
-export default function BookDetailModal({ book, onClose, onRetire, onStudentClick }: Props) {
+export default function BookDetailModal({ book, onClose, onRetire, onUnretire, onStudentClick }: Props) {
   const [isConfirmingRetire, setIsConfirmingRetire] = useState(false);
   const [isRetiring, setIsRetiring] = useState(false);
+  const [isUnretiring, setIsUnretiring] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleRetire = async () => {
@@ -51,6 +53,20 @@ export default function BookDetailModal({ book, onClose, onRetire, onStudentClic
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not retire this book.');
       setIsRetiring(false);
+    }
+  };
+
+  // Unlike retiring, this isn't destructive to anything (the book's loan
+  // history is untouched either way), so it doesn't need the same
+  // are-you-sure confirmation step.
+  const handleUnretire = async () => {
+    setIsUnretiring(true);
+    setError(null);
+    try {
+      await onUnretire(book.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not unretire this book.');
+      setIsUnretiring(false);
     }
   };
 
@@ -104,7 +120,17 @@ export default function BookDetailModal({ book, onClose, onRetire, onStudentClic
             <div className="mt-lg">
               {error && <p className="mb-sm text-sm text-red-600">{error}</p>}
               {book.isRetired ? (
-                <p className="text-sm text-ink-muted">This book has been retired from the active catalogue.</p>
+                <div className="flex flex-col items-start gap-sm">
+                  <p className="text-sm text-ink-muted">This book has been retired from the active catalogue.</p>
+                  <button
+                    type="button"
+                    onClick={handleUnretire}
+                    disabled={isUnretiring}
+                    className="inline-flex min-h-[44px] items-center rounded-sm border border-line bg-surface px-md text-sm font-medium text-ink-primary transition-opacity hover:opacity-80 disabled:opacity-60"
+                  >
+                    {isUnretiring ? 'Unretiring…' : 'Unretire Book'}
+                  </button>
+                </div>
               ) : (
                 <button
                   type="button"
