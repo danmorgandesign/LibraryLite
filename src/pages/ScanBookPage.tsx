@@ -4,18 +4,26 @@ import { ensureTenantSession, getSupabaseClient, getTenantSchoolId } from '../li
 import ConfirmationScreen from '../components/ConfirmationScreen';
 import NotInCataloguePage from './NotInCataloguePage';
 import BarcodeNotFoundPage from './BarcodeNotFoundPage';
+import ScanCoverPage from './ScanCoverPage';
+import CoverNotRecognizedPage from './CoverNotRecognizedPage';
+import BookAvailablePage from './BookAvailablePage';
+import BookOnLoanPage from './BookOnLoanPage';
 import EnterBookDetailsPage from './EnterBookDetailsPage';
 import AttachedToBarcodePage from './AttachedToBarcodePage';
 import SelectClassAndStudentPage from './SelectClassAndStudentPage';
 
 type CameraStatus = 'requesting' | 'active' | 'error';
 
-type Book = { id: string; title: string; author: string | null };
+type Book = { id: string; title: string; author: string | null; coverUrl: string | null };
 
 type ScanResult =
   | { status: 'scanning' }
   | { status: 'looking-up'; barcode: string }
-  | { status: 'not-in-catalogue'; barcode: string; title: string | null; author: string | null; coverUrl: string | null }
+  | { status: 'not-in-catalogue'; barcode: string; title: string; author: string | null; coverUrl: string | null }
+  | { status: 'barcode-not-found'; barcode: string }
+  | { status: 'scanning-cover'; barcode: string }
+  | { status: 'cover-not-recognized'; barcode: string }
+  | { status: 'looking-up-cover-match'; barcode: string; title: string; author: string }
   | { status: 'entering-book-details'; barcode: string }
   | { status: 'attached'; book: Book }
   | { status: 'available'; book: Book }
@@ -47,21 +55,50 @@ async function lookupExternalBookData(barcode: string): Promise<{ title: string 
   }
 }
 
+// Reverse lookup for the cover-scan path: once we have a title/author (from
+// the cover, not a barcode), search Open Library's catalogue for the
+// matching edition's ISBN, so the rest of the flow can treat it exactly like
+// a barcode scan (check our own catalogue, offer to add it, etc).
+async function lookupByTitleAndAuthor(title: string, author: string): Promise<{ isbn: string | null; coverUrl: string | null }> {
+  try {
+    const params = new URLSearchParams({ title, author, limit: '1' });
+    const res = await fetch(`https://openlibrary.org/search.json?${params.toString()}`);
+    if (!res.ok) return { isbn: null, coverUrl: null };
+    const data = await res.json();
+    const doc = data.docs?.[0];
+    if (!doc) return { isbn: null, coverUrl: null };
+    const isbn: string | null = doc.isbn?.[0] ?? null;
+    const coverUrl = doc.cover_i
+      ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg`
+      : isbn
+        ? `https://covers.openlibrary.org/b/isbn/${isbn}-L.jpg`
+        : null;
+    return { isbn, coverUrl };
+  } catch {
+    return { isbn: null, coverUrl: null };
+  }
+}
+
 async function lookupBarcode(barcode: string): Promise<ScanResult> {
   const supabase = getSupabaseClient();
   await ensureTenantSession();
 
   const { data: book, error: bookError } = await supabase
     .from('books')
-    .select('id, title, author')
+    .select('id, title, author, cover_url')
     .eq('barcode', barcode)
     .maybeSingle();
 
   if (bookError) throw bookError;
   if (!book) {
     const external = await lookupExternalBookData(barcode);
-    return { status: 'not-in-catalogue', barcode, ...external };
+    if (external.title === null) {
+      return { status: 'barcode-not-found', barcode };
+    }
+    return { status: 'not-in-catalogue', barcode, title: external.title, author: external.author, coverUrl: external.coverUrl };
   }
+
+  const bookRecord: Book = { id: book.id, title: book.title, author: book.author, coverUrl: book.cover_url };
 
   const { data: activeLoan, error: loanError } = await supabase
     .from('loans')
@@ -72,7 +109,23 @@ async function lookupBarcode(barcode: string): Promise<ScanResult> {
 
   if (loanError) throw loanError;
 
-  return activeLoan ? { status: 'on-loan', book } : { status: 'available', book };
+  return activeLoan ? { status: 'on-loan', book: bookRecord } : { status: 'available', book: bookRecord };
+}
+
+// After a successful cover scan we have a title/author but not yet a
+// barcode. Resolve one via Open Library, then run the normal barcode lookup
+// against it — falling back to the barcode actually printed on this copy
+// (the one the barcode scan already failed to identify) if no edition match
+// turns up, so "not in catalogue" always has a real barcode to attach to.
+async function resolveCoverMatch(originalBarcode: string, title: string, author: string): Promise<ScanResult> {
+  const { isbn, coverUrl } = await lookupByTitleAndAuthor(title, author);
+  const resolvedBarcode = isbn ?? originalBarcode;
+  const result = await lookupBarcode(resolvedBarcode);
+
+  if (result.status === 'barcode-not-found') {
+    return { status: 'not-in-catalogue', barcode: resolvedBarcode, title, author, coverUrl };
+  }
+  return result;
 }
 
 async function addBookToCatalogue(params: {
@@ -101,7 +154,7 @@ async function addBookToCatalogue(params: {
     .single();
 
   if (error) throw error;
-  return data;
+  return { id: data.id, title: data.title, author: data.author, coverUrl: params.coverUrl };
 }
 
 async function createLoan(bookId: string, studentId: string): Promise<void> {
@@ -141,10 +194,21 @@ export default function ScanBookPage({ onClose }: { onClose: () => void }) {
   const [isReturning, setIsReturning] = useState(false);
   const [returnError, setReturnError] = useState<string | null>(null);
 
+  // Only the barcode-scanning phase needs this camera — once we move on to a
+  // result screen (or the cover-scan screen, which manages its own camera)
+  // it's released, and re-acquired if the user comes back via "Try Scanning
+  // Barcode Again". Without this, the stream would stay open in the
+  // background for the rest of the flow and could conflict with
+  // ScanCoverPage requesting the same camera.
+  const needsBarcodeCamera = scanResult.status === 'scanning' || scanResult.status === 'looking-up';
+
   useEffect(() => {
+    if (!needsBarcodeCamera) return;
+
     let stream: MediaStream | null = null;
     let cancelled = false;
 
+    setCameraStatus('requesting');
     navigator.mediaDevices
       .getUserMedia({ video: { facingMode: 'environment' }, audio: false })
       .then((s) => {
@@ -166,7 +230,7 @@ export default function ScanBookPage({ onClose }: { onClose: () => void }) {
       cancelled = true;
       stream?.getTracks().forEach((track) => track.stop());
     };
-  }, []);
+  }, [needsBarcodeCamera]);
 
   useEffect(() => {
     if (cameraStatus !== 'active' || scanResult.status !== 'scanning') return;
@@ -200,24 +264,37 @@ export default function ScanBookPage({ onClose }: { onClose: () => void }) {
     return () => window.clearInterval(interval);
   }, [cameraStatus, scanResult.status]);
 
+  // Resolving a cover match (title/author -> ISBN -> catalogue lookup) is a
+  // side effect of entering this state, not of rendering it — trigger it
+  // here rather than inline in the JSX below.
+  useEffect(() => {
+    if (scanResult.status !== 'looking-up-cover-match') return;
+    const { barcode, title, author } = scanResult;
+    let cancelled = false;
+
+    resolveCoverMatch(barcode, title, author)
+      .then((result) => {
+        if (!cancelled) setScanResult(result);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setScanResult({
+            status: 'lookup-error',
+            message: err instanceof Error ? err.message : 'Something went wrong looking up that book.',
+          });
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scanResult.status]);
+
   const resetScan = () => setScanResult({ status: 'scanning' });
 
   if (scanResult.status === 'not-in-catalogue') {
     const { barcode, title, author, coverUrl } = scanResult;
-
-    // External lookup found nothing at all (no title) — there's no real data
-    // to confirm, so route to genuine manual entry instead of the "Unknown
-    // book" placeholder this page used to fall back to.
-    if (title === null) {
-      return (
-        <BarcodeNotFoundPage
-          barcode={barcode}
-          onEnterDetails={() => setScanResult({ status: 'entering-book-details', barcode })}
-          onScanAnother={resetScan}
-          onCancel={onClose}
-        />
-      );
-    }
 
     return (
       <NotInCataloguePage
@@ -256,6 +333,52 @@ export default function ScanBookPage({ onClose }: { onClose: () => void }) {
     );
   }
 
+  if (scanResult.status === 'barcode-not-found') {
+    const { barcode } = scanResult;
+    return (
+      <BarcodeNotFoundPage
+        barcode={barcode}
+        onScanCover={() => setScanResult({ status: 'scanning-cover', barcode })}
+        onEnterDetails={() => setScanResult({ status: 'entering-book-details', barcode })}
+        onScanAnother={resetScan}
+        onCancel={onClose}
+      />
+    );
+  }
+
+  if (scanResult.status === 'scanning-cover') {
+    const { barcode } = scanResult;
+    return (
+      <ScanCoverPage
+        onRecognized={(title, author) => {
+          setScanResult({ status: 'looking-up-cover-match', barcode, title, author });
+        }}
+        onNotRecognized={() => setScanResult({ status: 'cover-not-recognized', barcode })}
+        onClose={onClose}
+      />
+    );
+  }
+
+  if (scanResult.status === 'looking-up-cover-match') {
+    const { title } = scanResult;
+    return (
+      <div className="fixed inset-0 flex flex-col items-center justify-center gap-md p-lg text-center">
+        <p className="text-base text-ink-muted">Looking up &ldquo;{title}&rdquo;…</p>
+      </div>
+    );
+  }
+
+  if (scanResult.status === 'cover-not-recognized') {
+    const { barcode } = scanResult;
+    return (
+      <CoverNotRecognizedPage
+        onEnterDetails={() => setScanResult({ status: 'entering-book-details', barcode })}
+        onScanCoverAgain={() => setScanResult({ status: 'scanning-cover', barcode })}
+        onCancel={onClose}
+      />
+    );
+  }
+
   if (scanResult.status === 'entering-book-details') {
     const { barcode } = scanResult;
     return (
@@ -286,6 +409,47 @@ export default function ScanBookPage({ onClose }: { onClose: () => void }) {
         onLoanThisBook={() => setScanResult({ status: 'selecting-student', book })}
         onScanAnotherBook={resetScan}
         onHome={onClose}
+      />
+    );
+  }
+
+  if (scanResult.status === 'available') {
+    const { book } = scanResult;
+    return (
+      <BookAvailablePage
+        title={book.title}
+        author={book.author}
+        coverUrl={book.coverUrl}
+        onLoanThisBook={() => setScanResult({ status: 'selecting-student', book })}
+        onScanAnother={resetScan}
+        onCancel={onClose}
+      />
+    );
+  }
+
+  if (scanResult.status === 'on-loan') {
+    const { book } = scanResult;
+    return (
+      <BookOnLoanPage
+        title={book.title}
+        author={book.author}
+        coverUrl={book.coverUrl}
+        isReturning={isReturning}
+        error={returnError}
+        onReturnThisBook={async () => {
+          setIsReturning(true);
+          setReturnError(null);
+          try {
+            await returnLoan(book.id);
+            setScanResult({ status: 'returned', book });
+          } catch (err) {
+            setReturnError(err instanceof Error ? err.message : 'Could not return this book — try again.');
+          } finally {
+            setIsReturning(false);
+          }
+        }}
+        onScanAnother={resetScan}
+        onCancel={onClose}
       />
     );
   }
@@ -334,6 +498,21 @@ export default function ScanBookPage({ onClose }: { onClose: () => void }) {
     );
   }
 
+  if (scanResult.status === 'lookup-error') {
+    return (
+      <div className="fixed inset-0 flex flex-col items-center justify-center gap-md p-lg text-center">
+        <p className="text-base text-ink-muted">{scanResult.message}</p>
+        <button
+          type="button"
+          onClick={resetScan}
+          className="inline-flex min-h-[44px] items-center rounded-sm border border-line bg-white px-lg py-sm text-sm font-medium text-ink-primary"
+        >
+          Scan Another Book
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 flex flex-col p-lg">
       <div className="flex w-full shrink-0 justify-end">
@@ -365,65 +544,10 @@ export default function ScanBookPage({ onClose }: { onClose: () => void }) {
           )}
         </div>
 
-        {cameraStatus === 'active' && scanResult.status !== 'scanning' && (
-          <div className="flex w-[560px] max-w-full flex-col items-center gap-md rounded-md border border-line bg-white p-lg text-center">
-            {scanResult.status === 'looking-up' && <p className="text-base text-ink-muted">Looking up barcode {scanResult.barcode}…</p>}
-
-            {scanResult.status === 'available' && (
-              <>
-                <p className="text-base font-medium text-ink-primary">{scanResult.book.title}</p>
-                {scanResult.book.author && <p className="text-sm text-ink-muted">{scanResult.book.author}</p>}
-                <p className="text-sm text-ink-muted">Available to loan.</p>
-                <button
-                  type="button"
-                  onClick={() => setScanResult({ status: 'selecting-student', book: scanResult.book })}
-                  className="mt-xs inline-flex min-h-[44px] items-center rounded-sm bg-accent px-lg py-sm text-sm font-medium text-ink-primary transition-opacity hover:opacity-90"
-                >
-                  Loan this book
-                </button>
-              </>
-            )}
-
-            {scanResult.status === 'on-loan' && (
-              <>
-                <p className="text-base font-medium text-ink-primary">{scanResult.book.title}</p>
-                {scanResult.book.author && <p className="text-sm text-ink-muted">{scanResult.book.author}</p>}
-                <p className="text-sm text-ink-muted">Currently on loan.</p>
-                {returnError && <p className="text-sm text-red-600">{returnError}</p>}
-                <button
-                  type="button"
-                  disabled={isReturning}
-                  onClick={async () => {
-                    setIsReturning(true);
-                    setReturnError(null);
-                    try {
-                      await returnLoan(scanResult.book.id);
-                      setScanResult({ status: 'returned', book: scanResult.book });
-                    } catch (err) {
-                      setReturnError(err instanceof Error ? err.message : 'Could not return this book — try again.');
-                    } finally {
-                      setIsReturning(false);
-                    }
-                  }}
-                  className="mt-xs inline-flex min-h-[44px] items-center rounded-sm bg-accent px-lg py-sm text-sm font-medium text-ink-primary transition-opacity hover:opacity-90 disabled:opacity-60"
-                >
-                  {isReturning ? 'Returning…' : 'Return this book'}
-                </button>
-              </>
-            )}
-
-            {scanResult.status === 'lookup-error' && <p className="text-sm text-ink-muted">{scanResult.message}</p>}
-
-            {scanResult.status !== 'looking-up' && (
-              <button
-                type="button"
-                onClick={resetScan}
-                className="inline-flex min-h-[44px] items-center rounded-sm border border-line bg-white px-lg py-sm text-sm font-medium text-ink-primary"
-              >
-                Scan Another Book
-              </button>
-            )}
-          </div>
+        {cameraStatus === 'active' && scanResult.status === 'looking-up' && (
+          <p className="w-[328px] max-w-full text-center text-base text-ink-muted">
+            Looking up barcode {scanResult.barcode}…
+          </p>
         )}
 
         {scanResult.status === 'scanning' && (
