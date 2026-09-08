@@ -2,7 +2,9 @@ import { Link, NavLink, useLocation } from 'react-router-dom';
 
 export default function Header() {
   const location = useLocation();
-  const isLanding = location.pathname === '/';
+  // The dashboard has its own "Scan Book" action card, so the header pill
+  // would just duplicate it there.
+  const hasOwnScanCta = location.pathname === '/dashboard';
 
   const navLinkClassName = ({ isActive }: { isActive: boolean }) =>
     `inline-flex min-h-[44px] items-center rounded-sm px-sm text-sm font-medium transition-colors hover:bg-surface-subtle hover:text-ink-primary ${
@@ -12,7 +14,7 @@ export default function Header() {
   return (
     <header className="fixed inset-x-0 top-0 z-10 border-b border-line bg-surface/95 backdrop-blur">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-md px-lg py-md lg:flex-nowrap lg:justify-between">
-        <Link to="/" className="shrink-0 font-sans text-2xl font-bold tracking-tight text-ink-primary lg:text-3xl">
+        <Link to="/dashboard" className="shrink-0 font-sans text-2xl font-bold tracking-tight text-ink-primary lg:text-3xl">
           Library Lite
         </Link>
 
@@ -38,9 +40,10 @@ export default function Header() {
           <NavLink to="/students" className={navLinkClassName}>
             Students
           </NavLink>
-          {/* The landing page has its own full-size hero CTA instead of this
-              header pill (matches the Figma nav convention). */}
-          {!isLanding && (
+          <NavLink to="/teachers" className={navLinkClassName}>
+            Teachers
+          </NavLink>
+          {!hasOwnScanCta && (
             <Link
               to="/scan"
               className="inline-flex min-h-[44px] items-center rounded-full bg-accent px-lg text-sm font-medium text-ink-primary transition-opacity hover:opacity-90"
