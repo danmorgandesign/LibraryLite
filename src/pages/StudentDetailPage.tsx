@@ -1,16 +1,9 @@
 import { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import Header from '../components/layout/Header';
 import { ensureTenantSession, getSupabaseClient } from '../lib/supabaseClient';
 
 type Student = { id: string; first_name: string; last_initial: string | null };
-
-type Props = {
-  student: Student;
-  onScan: () => void;
-  onBooksClick: () => void;
-  onClassesClick: () => void;
-  onBack: () => void;
-};
 
 type CurrentLoan = {
   id: string;
@@ -51,6 +44,18 @@ function StatusBadge({ status }: { status: CurrentLoan['status'] }) {
   );
 }
 
+async function fetchStudent(studentId: string): Promise<Student> {
+  await ensureTenantSession();
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from('students')
+    .select('id, first_name, last_initial')
+    .eq('id', studentId)
+    .single();
+  if (error) throw error;
+  return data;
+}
+
 async function fetchLoanHistory(studentId: string): Promise<{ current: CurrentLoan[]; history: PastLoan[] }> {
   await ensureTenantSession();
   const supabase = getSupabaseClient();
@@ -89,7 +94,12 @@ async function markReturned(loanId: string): Promise<void> {
   if (error) throw error;
 }
 
-export default function StudentDetailPage({ student, onScan, onBooksClick, onClassesClick, onBack }: Props) {
+export default function StudentDetailPage() {
+  const { studentId } = useParams<{ studentId: string }>();
+  const navigate = useNavigate();
+  const goBack = () => navigate('/students');
+
+  const [student, setStudent] = useState<Student | null>(null);
   const [current, setCurrent] = useState<CurrentLoan[] | null>(null);
   const [history, setHistory] = useState<PastLoan[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -97,21 +107,25 @@ export default function StudentDetailPage({ student, onScan, onBooksClick, onCla
   const [returningId, setReturningId] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!studentId) return;
     let cancelled = false;
-    fetchLoanHistory(student.id)
-      .then(({ current, history }) => {
+    Promise.all([fetchStudent(studentId), fetchLoanHistory(studentId)])
+      .then(([studentData, { current, history }]) => {
         if (!cancelled) {
+          setStudent(studentData);
           setCurrent(current);
           setHistory(history);
         }
       })
       .catch((err) => {
-        if (!cancelled) setLoadError(err instanceof Error ? err.message : 'Could not load loan history.');
+        if (!cancelled) setLoadError(err instanceof Error ? err.message : 'Could not load this student.');
       });
     return () => {
       cancelled = true;
     };
-  }, [student.id]);
+  }, [studentId]);
+
+  if (!studentId) return null;
 
   const isLoading = current === null && !loadError;
 
@@ -132,19 +146,19 @@ export default function StudentDetailPage({ student, onScan, onBooksClick, onCla
 
   return (
     <>
-      <Header activeItem="students" onScan={onScan} onBooksClick={onBooksClick} onClassesClick={onClassesClick} />
+      <Header />
 
       <main className="min-h-screen px-lg pb-2xl pt-[104px] lg:px-2xl">
         <div className="mx-auto max-w-5xl">
           <button
             type="button"
-            onClick={onBack}
+            onClick={goBack}
             className="text-sm font-medium text-ink-muted transition-colors hover:text-ink-primary"
           >
             ← Back to Students
           </button>
 
-          <h1 className="mt-lg text-2xl font-semibold text-ink-primary">{formatName(student)}</h1>
+          <h1 className="mt-lg text-2xl font-semibold text-ink-primary">{student ? formatName(student) : 'Loading…'}</h1>
           <p className="mt-xs text-sm text-ink-muted">Loan history for this student.</p>
 
           {loadError && <p className="mt-lg text-sm text-red-600">{loadError}</p>}

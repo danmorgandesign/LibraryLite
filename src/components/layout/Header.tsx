@@ -1,22 +1,20 @@
-type HeaderProps = {
-  /** Highlights this nav item as the current page. */
-  activeItem?: 'books' | 'classes' | 'students';
-  onBooksClick?: () => void;
-  onClassesClick?: () => void;
-  onStudentsClick?: () => void;
-  /** When provided, renders the "Scan a Book" pill CTA (matches the Figma nav
-   * convention for screens other than the landing page, which has its own
-   * full-size hero CTA instead). */
-  onScan?: () => void;
-};
+import { Link, NavLink, useLocation } from 'react-router-dom';
 
-export default function Header({ activeItem, onBooksClick, onClassesClick, onStudentsClick, onScan }: HeaderProps) {
+export default function Header() {
+  const location = useLocation();
+  const isLanding = location.pathname === '/';
+
+  const navLinkClassName = ({ isActive }: { isActive: boolean }) =>
+    `inline-flex min-h-[44px] items-center rounded-sm px-sm text-sm font-medium transition-colors hover:bg-surface-subtle hover:text-ink-primary ${
+      isActive ? 'text-ink-primary' : 'text-ink-muted'
+    }`;
+
   return (
     <header className="fixed inset-x-0 top-0 z-10 border-b border-line bg-surface/95 backdrop-blur">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-md px-lg py-md lg:flex-nowrap lg:justify-between">
-        <a href="/" className="shrink-0 font-sans text-2xl font-bold tracking-tight text-ink-primary lg:text-3xl">
+        <Link to="/" className="shrink-0 font-sans text-2xl font-bold tracking-tight text-ink-primary lg:text-3xl">
           Library Lite
-        </a>
+        </Link>
 
         <div className="order-3 w-full lg:order-2 lg:w-auto lg:max-w-sm lg:flex-1 lg:px-xl">
           <label htmlFor="book-search" className="sr-only">
@@ -31,44 +29,24 @@ export default function Header({ activeItem, onBooksClick, onClassesClick, onStu
         </div>
 
         <nav aria-label="Primary" className="order-2 ml-auto flex shrink-0 items-center gap-xl lg:order-3 lg:ml-0">
-          <button
-            type="button"
-            onClick={onBooksClick}
-            aria-current={activeItem === 'books' ? 'page' : undefined}
-            className={`inline-flex min-h-[44px] items-center rounded-sm px-sm text-sm font-medium transition-colors hover:bg-surface-subtle hover:text-ink-primary ${
-              activeItem === 'books' ? 'text-ink-primary' : 'text-ink-muted'
-            }`}
-          >
+          <NavLink to="/books" className={navLinkClassName}>
             Books
-          </button>
-          <button
-            type="button"
-            onClick={onClassesClick}
-            aria-current={activeItem === 'classes' ? 'page' : undefined}
-            className={`inline-flex min-h-[44px] items-center rounded-sm px-sm text-sm font-medium transition-colors hover:bg-surface-subtle hover:text-ink-primary ${
-              activeItem === 'classes' ? 'text-ink-primary' : 'text-ink-muted'
-            }`}
-          >
+          </NavLink>
+          <NavLink to="/classes" className={navLinkClassName}>
             Classes
-          </button>
-          <button
-            type="button"
-            onClick={onStudentsClick}
-            aria-current={activeItem === 'students' ? 'page' : undefined}
-            className={`inline-flex min-h-[44px] items-center rounded-sm px-sm text-sm font-medium transition-colors hover:bg-surface-subtle hover:text-ink-primary ${
-              activeItem === 'students' ? 'text-ink-primary' : 'text-ink-muted'
-            }`}
-          >
+          </NavLink>
+          <NavLink to="/students" className={navLinkClassName}>
             Students
-          </button>
-          {onScan && (
-            <button
-              type="button"
-              onClick={onScan}
+          </NavLink>
+          {/* The landing page has its own full-size hero CTA instead of this
+              header pill (matches the Figma nav convention). */}
+          {!isLanding && (
+            <Link
+              to="/scan"
               className="inline-flex min-h-[44px] items-center rounded-full bg-accent px-lg text-sm font-medium text-ink-primary transition-opacity hover:opacity-90"
             >
               Scan a Book
-            </button>
+            </Link>
           )}
         </nav>
       </div>

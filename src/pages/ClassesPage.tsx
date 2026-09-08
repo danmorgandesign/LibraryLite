@@ -1,17 +1,9 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Header from '../components/layout/Header';
 import { ensureTenantSession, getSupabaseClient, getTenantSchoolId } from '../lib/supabaseClient';
 
 type Classroom = { id: string; class_label: string };
-
-type Props = {
-  onScan: () => void;
-  onBooksClick: () => void;
-  onStudentsClick: () => void;
-  onClassClick: (classroom: Classroom) => void;
-  onManageClass: (classroom: Classroom) => void;
-  onViewLoans: (classroom: Classroom) => void;
-};
 
 async function fetchClassrooms(): Promise<Classroom[]> {
   await ensureTenantSession();
@@ -35,7 +27,8 @@ async function addClassroom(classLabel: string): Promise<Classroom> {
   return data;
 }
 
-export default function ClassesPage({ onScan, onBooksClick, onStudentsClick, onClassClick, onManageClass, onViewLoans }: Props) {
+export default function ClassesPage() {
+  const navigate = useNavigate();
   const [classrooms, setClassrooms] = useState<Classroom[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -75,7 +68,7 @@ export default function ClassesPage({ onScan, onBooksClick, onStudentsClick, onC
 
   return (
     <>
-      <Header activeItem="classes" onScan={onScan} onBooksClick={onBooksClick} onStudentsClick={onStudentsClick} />
+      <Header />
 
       <main className="min-h-screen px-lg pb-2xl pt-[104px] lg:px-2xl">
         <div className="mx-auto max-w-5xl">
@@ -102,7 +95,7 @@ export default function ClassesPage({ onScan, onBooksClick, onStudentsClick, onC
                 >
                   <button
                     type="button"
-                    onClick={() => onClassClick(classroom)}
+                    onClick={() => navigate(`/students?class=${classroom.id}`)}
                     className="w-fit text-left text-xl font-semibold text-ink-primary underline-offset-2 hover:underline"
                   >
                     {classroom.class_label}
@@ -110,14 +103,18 @@ export default function ClassesPage({ onScan, onBooksClick, onStudentsClick, onC
                   <div className="flex flex-wrap gap-sm">
                     <button
                       type="button"
-                      onClick={() => onManageClass(classroom)}
+                      onClick={() =>
+                        navigate(`/classes/${classroom.id}/manage`, { state: { classroomLabel: classroom.class_label } })
+                      }
                       className="inline-flex min-h-[44px] items-center rounded-sm border border-line bg-surface px-md text-sm font-medium text-ink-primary transition-opacity hover:opacity-80"
                     >
                       Manage Class
                     </button>
                     <button
                       type="button"
-                      onClick={() => onViewLoans(classroom)}
+                      onClick={() =>
+                        navigate(`/classes/${classroom.id}/loans`, { state: { classroomLabel: classroom.class_label } })
+                      }
                       className="inline-flex min-h-[44px] items-center rounded-sm border border-line bg-surface px-md text-sm font-medium text-ink-primary transition-opacity hover:opacity-80"
                     >
                       View Loans

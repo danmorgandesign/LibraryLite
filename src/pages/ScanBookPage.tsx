@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { BarcodeDetector } from 'barcode-detector/ponyfill';
 import { ensureTenantSession, getSupabaseClient, getTenantSchoolId } from '../lib/supabaseClient';
 import ConfirmationScreen from '../components/ConfirmationScreen';
@@ -183,7 +184,12 @@ async function returnLoan(bookId: string): Promise<void> {
   if (error) throw error;
 }
 
-export default function ScanBookPage({ onClose }: { onClose: () => void }) {
+export default function ScanBookPage() {
+  const navigate = useNavigate();
+  // Scan can be launched from almost any page (the header's "Scan a Book"
+  // pill, or the landing page's hero CTA) — going back to wherever that was
+  // beats the old hardcoded "always return to the landing page" behavior.
+  const onClose = () => navigate(-1);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [cameraStatus, setCameraStatus] = useState<CameraStatus>('requesting');
   const [scanResult, setScanResult] = useState<ScanResult>({ status: 'scanning' });

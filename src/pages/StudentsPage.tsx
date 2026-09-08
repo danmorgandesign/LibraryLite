@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import Header from '../components/layout/Header';
 import { ensureTenantSession, getSupabaseClient } from '../lib/supabaseClient';
 
@@ -15,16 +16,6 @@ type Classroom = { id: string; class_label: string };
 // checked out (matches the loan window used on Class Loans/Student Detail),
 // so overdue is computed from loaned_at rather than stored.
 const LOAN_WINDOW_DAYS = 21;
-
-type Props = {
-  onScan: () => void;
-  onBooksClick: () => void;
-  onClassesClick: () => void;
-  onStudentClick: (student: Student) => void;
-  /** Pre-toggles this class's filter pill on mount (e.g. arriving here by
-   * clicking a class name on the Classes page) — undefined shows everyone. */
-  initialClassroomId?: string;
-};
 
 const SORT_OPTIONS = [
   { key: 'alphabet', label: 'Alphabetical (A-Z)' },
@@ -86,7 +77,15 @@ async function fetchStudents(): Promise<StudentRow[]> {
   });
 }
 
-export default function StudentsPage({ onScan, onBooksClick, onClassesClick, onStudentClick, initialClassroomId }: Props) {
+export default function StudentsPage() {
+  const navigate = useNavigate();
+  const goToStudent = (student: Student) => navigate(`/students/${student.id}`);
+  // The initial class filter arrives as a query param (e.g. clicking a class
+  // name on the Classes page links to /students?class=<id>) rather than
+  // route state, so a direct link or a refresh still lands pre-filtered.
+  const [searchParams] = useSearchParams();
+  const initialClassroomId = searchParams.get('class') ?? undefined;
+
   const [classrooms, setClassrooms] = useState<Classroom[] | null>(null);
   const [students, setStudents] = useState<StudentRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -154,7 +153,7 @@ export default function StudentsPage({ onScan, onBooksClick, onClassesClick, onS
 
   return (
     <>
-      <Header activeItem="students" onScan={onScan} onBooksClick={onBooksClick} onClassesClick={onClassesClick} />
+      <Header />
 
       <main className="min-h-screen px-lg pb-2xl pt-[104px] lg:px-2xl">
         <div className="mx-auto max-w-5xl">
@@ -253,7 +252,7 @@ export default function StudentsPage({ onScan, onBooksClick, onClassesClick, onS
                 >
                   <button
                     type="button"
-                    onClick={() => onStudentClick(student)}
+                    onClick={() => goToStudent(student)}
                     className="w-fit text-left text-sm font-medium text-ink-primary underline-offset-2 hover:underline"
                   >
                     {formatName(student)}
@@ -270,7 +269,7 @@ export default function StudentsPage({ onScan, onBooksClick, onClassesClick, onS
                   </span>
                   <button
                     type="button"
-                    onClick={() => onStudentClick(student)}
+                    onClick={() => goToStudent(student)}
                     className="inline-flex min-h-[36px] w-fit items-center rounded-sm border border-line bg-surface px-md text-sm font-medium text-ink-primary transition-opacity hover:opacity-80"
                   >
                     Details

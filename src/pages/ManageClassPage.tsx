@@ -1,19 +1,17 @@
 import { useEffect, useState } from 'react';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import Header from '../components/layout/Header';
 import { ensureTenantSession, getSupabaseClient, getTenantSchoolId } from '../lib/supabaseClient';
 
 type Student = { id: string; first_name: string; last_initial: string | null };
 
-type Props = {
-  classroomId: string;
-  classroomLabel: string;
-  onScan: () => void;
-  onBooksClick: () => void;
-  onClassesClick: () => void;
-  onStudentsClick: () => void;
-  onStudentClick: (student: Student) => void;
-  onBack: () => void;
-};
+async function fetchClassroomLabel(classroomId: string): Promise<string> {
+  await ensureTenantSession();
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.from('classrooms').select('class_label').eq('id', classroomId).single();
+  if (error) throw error;
+  return data.class_label;
+}
 
 type Modal =
   | { type: 'add' }
@@ -62,8 +60,19 @@ async function fetchStudents(classroomId: string): Promise<Student[]> {
   return data;
 }
 
-export default function ManageClassPage({ classroomId, classroomLabel: initialClassroomLabel, onScan, onBooksClick, onClassesClick, onStudentsClick, onStudentClick, onBack }: Props) {
-  const [classroomLabel, setClassroomLabel] = useState(initialClassroomLabel);
+export default function ManageClassPage() {
+  const { classroomId } = useParams<{ classroomId: string }>();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const goToStudent = (student: Student) => navigate(`/students/${student.id}`);
+  const goBack = () => navigate('/classes');
+
+  // Passed via navigation state when arriving from the Classes page (avoids
+  // a redundant fetch); falls back to fetching it directly for a refresh or
+  // a direct link, where there's no router state to read.
+  const [classroomLabel, setClassroomLabel] = useState<string | null>(
+    (location.state as { classroomLabel?: string } | null)?.classroomLabel ?? null,
+  );
   const [students, setStudents] = useState<Student[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [modal, setModal] = useState<Modal>(null);
@@ -72,6 +81,22 @@ export default function ManageClassPage({ classroomId, classroomLabel: initialCl
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
+    if (!classroomId || classroomLabel !== null) return;
+    let cancelled = false;
+    fetchClassroomLabel(classroomId)
+      .then((label) => {
+        if (!cancelled) setClassroomLabel(label);
+      })
+      .catch((err) => {
+        if (!cancelled) setLoadError(err instanceof Error ? err.message : 'Could not load this class.');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [classroomId, classroomLabel]);
+
+  useEffect(() => {
+    if (!classroomId) return;
     let cancelled = false;
     fetchStudents(classroomId)
       .then((data) => {
@@ -84,6 +109,8 @@ export default function ManageClassPage({ classroomId, classroomLabel: initialCl
       cancelled = true;
     };
   }, [classroomId]);
+
+  if (!classroomId) return null;
 
   const isLoading = students === null && !loadError;
 
@@ -168,7 +195,7 @@ export default function ManageClassPage({ classroomId, classroomLabel: initialCl
       const supabase = getSupabaseClient();
       const { error } = await supabase.from('classrooms').delete().eq('id', classroomId);
       if (error) throw error;
-      onBack();
+      goBack();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Could not delete class.');
       setIsSubmitting(false);
@@ -214,13 +241,13 @@ export default function ManageClassPage({ classroomId, classroomLabel: initialCl
 
   return (
     <>
-      <Header activeItem="classes" onScan={onScan} onBooksClick={onBooksClick} onClassesClick={onClassesClick} onStudentsClick={onStudentsClick} />
+      <Header />
 
       <main className="min-h-screen px-lg pb-2xl pt-[104px] lg:px-2xl">
         <div className="mx-auto max-w-5xl">
           <button
             type="button"
-            onClick={onBack}
+            onClick={goBack}
             className="text-sm font-medium text-ink-muted transition-colors hover:text-ink-primary"
           >
             ← Back to Classes
@@ -229,7 +256,9 @@ export default function ManageClassPage({ classroomId, classroomLabel: initialCl
           <div className="mt-lg flex items-start justify-between">
             <div>
               <h1 className="text-2xl font-semibold text-ink-primary">Manage Class</h1>
-              <p className="mt-xs text-sm text-ink-muted">Manage {classroomLabel}'s student roster.</p>
+              <p className="mt-xs text-sm text-ink-muted">
+                {classroomLabel ? `Manage ${classroomLabel}'s student roster.` : 'Loading…'}
+              </p>
             </div>
             <button
               type="button"
@@ -244,7 +273,7 @@ export default function ManageClassPage({ classroomId, classroomLabel: initialCl
             <button
               type="button"
               onClick={() => {
-                setNameInput(classroomLabel);
+                setNameInput(classroomLabel ?? '');
                 setModal({ type: 'rename-class' });
               }}
               className="inline-flex min-h-[44px] items-center rounded-sm border border-line bg-surface px-md text-sm font-medium text-ink-primary transition-opacity hover:opacity-80"
@@ -273,7 +302,7 @@ export default function ManageClassPage({ classroomId, classroomLabel: initialCl
                 <div key={student.id} className="flex flex-col gap-md rounded-md border border-line bg-surface p-lg shadow-sm">
                   <button
                     type="button"
-                    onClick={() => onStudentClick(student)}
+                    onClick={() => goToStudent(student)}
                     className="w-fit text-left text-lg font-medium text-ink-primary underline-offset-2 hover:underline"
                   >
                     {formatName(student)}

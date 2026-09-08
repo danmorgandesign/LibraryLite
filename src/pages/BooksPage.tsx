@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Header from '../components/layout/Header';
 import BookDetailModal from '../components/BookDetailModal';
 import { ensureTenantSession, getSupabaseClient } from '../lib/supabaseClient';
@@ -99,14 +100,9 @@ async function retireBook(bookId: string): Promise<void> {
   if (error) throw error;
 }
 
-type Props = {
-  onScan: () => void;
-  onClassesClick: () => void;
-  onStudentsClick: () => void;
-  onStudentClick: (student: Student) => void;
-};
-
-export default function BooksPage({ onScan, onClassesClick, onStudentsClick, onStudentClick }: Props) {
+export default function BooksPage() {
+  const navigate = useNavigate();
+  const goToStudent = (student: Student) => navigate(`/students/${student.id}`);
   const [books, setBooks] = useState<Book[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterKey>('all');
@@ -145,7 +141,7 @@ export default function BooksPage({ onScan, onClassesClick, onStudentsClick, onS
 
   return (
     <>
-      <Header activeItem="books" onScan={onScan} onClassesClick={onClassesClick} onStudentsClick={onStudentsClick} />
+      <Header />
 
       <main className="min-h-screen px-lg pb-2xl pt-[104px] lg:px-2xl">
         <div className="mx-auto max-w-5xl">
@@ -254,7 +250,7 @@ export default function BooksPage({ onScan, onClassesClick, onStudentsClick, onS
         <BookDetailModal
           book={selectedBook}
           onClose={() => setSelectedBook(null)}
-          onStudentClick={onStudentClick}
+          onStudentClick={goToStudent}
           onRetire={async (bookId) => {
             await retireBook(bookId);
             setBooks((prev) => (prev ?? []).filter((b) => b.id !== bookId));

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { HashRouter, Route, Routes } from 'react-router-dom';
 import BooksPage from './pages/BooksPage';
 import ClassesPage from './pages/ClassesPage';
 import ClassLoansPage from './pages/ClassLoansPage';
@@ -8,120 +8,26 @@ import ScanBookPage from './pages/ScanBookPage';
 import StudentsPage from './pages/StudentsPage';
 import StudentDetailPage from './pages/StudentDetailPage';
 
-type Page = 'landing' | 'scan' | 'books' | 'classes' | 'manage-class' | 'class-loans' | 'students' | 'student-detail';
-type Classroom = { id: string; class_label: string };
-type Student = { id: string; first_name: string; last_initial: string | null };
-
+// HashRouter (not BrowserRouter) because this app deploys as a static build
+// to GitHub Pages — there's no server to rewrite deep links like
+// /students/:id back to index.html, and Pages doesn't support that natively.
+// Hash routes (/#/students/:id) always resolve to index.html since
+// everything after the # is client-side only, so this needs no extra
+// redirect config. Worth revisiting if the app ever moves to a host that
+// can do SPA rewrites and clean URLs become worth the setup.
 export default function App() {
-  const [page, setPage] = useState<Page>('landing');
-  const [selectedClassroom, setSelectedClassroom] = useState<Classroom | null>(null);
-  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
-  const [studentsFilterClassroomId, setStudentsFilterClassroomId] = useState<string | undefined>(undefined);
-
-  const goToStudent = (student: Student) => {
-    setSelectedStudent(student);
-    setPage('student-detail');
-  };
-
-  const goToStudents = (classroomId?: string) => {
-    setStudentsFilterClassroomId(classroomId);
-    setPage('students');
-  };
-
-  if (page === 'scan') {
-    return <ScanBookPage onClose={() => setPage('landing')} />;
-  }
-
-  if (page === 'books') {
-    return (
-      <BooksPage
-        onScan={() => setPage('scan')}
-        onClassesClick={() => setPage('classes')}
-        onStudentsClick={() => goToStudents()}
-        onStudentClick={goToStudent}
-      />
-    );
-  }
-
-  if (page === 'classes') {
-    return (
-      <ClassesPage
-        onScan={() => setPage('scan')}
-        onBooksClick={() => setPage('books')}
-        onStudentsClick={() => goToStudents()}
-        onClassClick={(classroom) => goToStudents(classroom.id)}
-        onManageClass={(classroom) => {
-          setSelectedClassroom(classroom);
-          setPage('manage-class');
-        }}
-        onViewLoans={(classroom) => {
-          setSelectedClassroom(classroom);
-          setPage('class-loans');
-        }}
-      />
-    );
-  }
-
-  if (page === 'manage-class' && selectedClassroom) {
-    return (
-      <ManageClassPage
-        classroomId={selectedClassroom.id}
-        classroomLabel={selectedClassroom.class_label}
-        onScan={() => setPage('scan')}
-        onBooksClick={() => setPage('books')}
-        onClassesClick={() => setPage('classes')}
-        onStudentsClick={() => goToStudents()}
-        onStudentClick={goToStudent}
-        onBack={() => setPage('classes')}
-      />
-    );
-  }
-
-  if (page === 'class-loans' && selectedClassroom) {
-    return (
-      <ClassLoansPage
-        classroomId={selectedClassroom.id}
-        classroomLabel={selectedClassroom.class_label}
-        onScan={() => setPage('scan')}
-        onBooksClick={() => setPage('books')}
-        onClassesClick={() => setPage('classes')}
-        onStudentsClick={() => goToStudents()}
-        onStudentClick={goToStudent}
-        onBack={() => setPage('classes')}
-      />
-    );
-  }
-
-  if (page === 'students') {
-    return (
-      <StudentsPage
-        onScan={() => setPage('scan')}
-        onBooksClick={() => setPage('books')}
-        onClassesClick={() => setPage('classes')}
-        onStudentClick={goToStudent}
-        initialClassroomId={studentsFilterClassroomId}
-      />
-    );
-  }
-
-  if (page === 'student-detail' && selectedStudent) {
-    return (
-      <StudentDetailPage
-        student={selectedStudent}
-        onScan={() => setPage('scan')}
-        onBooksClick={() => setPage('books')}
-        onClassesClick={() => setPage('classes')}
-        onBack={() => goToStudents()}
-      />
-    );
-  }
-
   return (
-    <LandingPage
-      onScan={() => setPage('scan')}
-      onBooksClick={() => setPage('books')}
-      onClassesClick={() => setPage('classes')}
-      onStudentsClick={() => goToStudents()}
-    />
+    <HashRouter>
+      <Routes>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/scan" element={<ScanBookPage />} />
+        <Route path="/books" element={<BooksPage />} />
+        <Route path="/classes" element={<ClassesPage />} />
+        <Route path="/classes/:classroomId/manage" element={<ManageClassPage />} />
+        <Route path="/classes/:classroomId/loans" element={<ClassLoansPage />} />
+        <Route path="/students" element={<StudentsPage />} />
+        <Route path="/students/:studentId" element={<StudentDetailPage />} />
+      </Routes>
+    </HashRouter>
   );
 }

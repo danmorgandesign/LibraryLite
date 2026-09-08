@@ -1,25 +1,18 @@
+import { Link } from 'react-router-dom';
 import Header from '../components/layout/Header';
 
-type Props = {
-  onScan: () => void;
-  onBooksClick: () => void;
-  onClassesClick: () => void;
-  onStudentsClick: () => void;
-};
-
-export default function LandingPage({ onScan, onBooksClick, onClassesClick, onStudentsClick }: Props) {
+export default function LandingPage() {
   return (
     <>
-      <Header onBooksClick={onBooksClick} onClassesClick={onClassesClick} onStudentsClick={onStudentsClick} />
+      <Header />
 
       <main className="fixed inset-0 flex items-center justify-center px-lg">
-        <button
-          type="button"
-          onClick={onScan}
+        <Link
+          to="/scan"
           className="inline-flex min-h-[44px] items-center rounded-sm bg-accent px-lg py-sm text-base font-medium text-ink-primary transition-opacity hover:opacity-90"
         >
           Scan a Book to get Started
-        </button>
+        </Link>
       </main>
     </>
   );
