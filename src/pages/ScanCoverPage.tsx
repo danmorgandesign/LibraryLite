@@ -1,31 +1,34 @@
 import { useEffect, useRef, useState } from 'react';
+import { getSupabaseClient } from '../lib/supabaseClient';
 
 type CameraStatus = 'requesting' | 'active' | 'error';
 
-const ANALYSIS_DELAY_MS = 1800;
+// Camera auto-exposure/focus needs a moment to settle after the stream
+// starts, or the captured frame comes out blurry/washed out — this is also
+// what stops the capture from firing the instant the preview appears.
+const CAPTURE_DELAY_MS = 1200;
 
-// Placeholder for real cover recognition — this repo has no on-device or
-// cloud vision model wired up, so the "photograph the cover, match it to a
-// book" step is simulated with a timer and a canned result. Swap this for a
-// real vision/OCR API when one exists; everything downstream (resolving the
-// recognized title/author to an ISBN and checking the catalogue) is real.
-const MOCK_COVER_MATCHES = [
-  { title: 'Where the Wild Things Are', author: 'Maurice Sendak' },
-  { title: 'Matilda', author: 'Roald Dahl' },
-  { title: 'The Very Hungry Caterpillar', author: 'Eric Carle' },
-];
+type AnalyzeCoverResponse = { title: string | null; author: string | null; error?: string };
 
-function simulateCoverAnalysis(): Promise<{ title: string; author: string } | null> {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      const recognized = Math.random() < 0.7;
-      if (!recognized) {
-        resolve(null);
-        return;
-      }
-      resolve(MOCK_COVER_MATCHES[Math.floor(Math.random() * MOCK_COVER_MATCHES.length)]);
-    }, ANALYSIS_DELAY_MS);
+function captureFrameAsBase64(video: HTMLVideoElement): string | null {
+  const canvas = document.createElement('canvas');
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  // Strip the "data:image/jpeg;base64," prefix — the Vision API (and our
+  // Edge Function) wants the raw base64 payload only.
+  return canvas.toDataURL('image/jpeg', 0.85).split(',')[1] ?? null;
+}
+
+async function analyzeCover(imageBase64: string): Promise<{ title: string; author: string } | null> {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.functions.invoke<AnalyzeCoverResponse>('analyze-cover', {
+    body: { imageBase64 },
   });
+  if (error || !data || data.error || !data.title) return null;
+  return { title: data.title, author: data.author ?? '' };
 }
 
 type Props = {
@@ -37,7 +40,8 @@ type Props = {
 export default function ScanCoverPage({ onRecognized, onNotRecognized, onClose }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [cameraStatus, setCameraStatus] = useState<CameraStatus>('requesting');
-  const analyzingRef = useRef(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const capturedRef = useRef(false);
 
   useEffect(() => {
     let stream: MediaStream | null = null;
@@ -67,19 +71,27 @@ export default function ScanCoverPage({ onRecognized, onNotRecognized, onClose }
   }, []);
 
   useEffect(() => {
-    if (cameraStatus !== 'active' || analyzingRef.current) return;
-    analyzingRef.current = true;
+    if (cameraStatus !== 'active' || capturedRef.current) return;
+    capturedRef.current = true;
 
-    simulateCoverAnalysis().then((match) => {
+    const timeout = window.setTimeout(async () => {
+      setIsAnalyzing(true);
+      const frame = videoRef.current ? captureFrameAsBase64(videoRef.current) : null;
+      if (!frame) {
+        onNotRecognized();
+        return;
+      }
+      const match = await analyzeCover(frame);
       if (match) {
         onRecognized(match.title, match.author);
       } else {
         onNotRecognized();
       }
-    });
+    }, CAPTURE_DELAY_MS);
+
+    return () => window.clearTimeout(timeout);
     // A fresh mount (the caller re-renders this component to retry via
-    // "Try Scanning Cover Again") is how this analysis re-runs — it isn't
-    // meant to repeat while a single mount stays on 'active'.
+    // "Try Scanning Cover Again") is how this capture re-runs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cameraStatus]);
 
@@ -115,7 +127,7 @@ export default function ScanCoverPage({ onRecognized, onNotRecognized, onClose }
         </div>
 
         <p className="w-[360px] max-w-full text-center text-base text-ink-muted">
-          {cameraStatus === 'active'
+          {isAnalyzing
             ? 'Analysing the cover…'
             : "Hold the book's front cover steady in front of the camera to scan it."}
         </p>
