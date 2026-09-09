@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import Header from '../components/layout/Header';
-import { ensureTenantSession, getSupabaseClient } from '../lib/supabaseClient';
+import { getSupabaseClient } from '../lib/supabaseClient';
 
 type Student = { id: string; first_name: string; last_initial: string | null };
 
@@ -45,7 +45,6 @@ function StatusBadge({ status }: { status: CurrentLoan['status'] }) {
 }
 
 async function fetchStudent(studentId: string): Promise<Student> {
-  await ensureTenantSession();
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from('students')
@@ -57,7 +56,6 @@ async function fetchStudent(studentId: string): Promise<Student> {
 }
 
 async function fetchLoanHistory(studentId: string): Promise<{ current: CurrentLoan[]; history: PastLoan[] }> {
-  await ensureTenantSession();
   const supabase = getSupabaseClient();
 
   const { data, error } = await supabase
@@ -88,7 +86,6 @@ async function fetchLoanHistory(studentId: string): Promise<{ current: CurrentLo
 }
 
 async function markReturned(loanId: string): Promise<void> {
-  await ensureTenantSession();
   const supabase = getSupabaseClient();
   const { error } = await supabase.from('loans').update({ returned_at: new Date().toISOString() }).eq('id', loanId);
   if (error) throw error;

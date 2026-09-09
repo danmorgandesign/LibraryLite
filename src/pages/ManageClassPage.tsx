@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import Header from '../components/layout/Header';
-import { ensureTenantSession, getSupabaseClient, getTenantSchoolId } from '../lib/supabaseClient';
+import { getSupabaseClient } from '../lib/supabaseClient';
+import { useAuth } from '../lib/auth';
 
 type Student = { id: string; first_name: string; last_initial: string | null };
 
 async function fetchClassroomLabel(classroomId: string): Promise<string> {
-  await ensureTenantSession();
   const supabase = getSupabaseClient();
   const { data, error } = await supabase.from('classrooms').select('class_label').eq('id', classroomId).single();
   if (error) throw error;
@@ -49,7 +49,6 @@ function formatName(student: Student) {
 }
 
 async function fetchStudents(classroomId: string): Promise<Student[]> {
-  await ensureTenantSession();
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from('students')
@@ -61,6 +60,7 @@ async function fetchStudents(classroomId: string): Promise<Student[]> {
 }
 
 export default function ManageClassPage() {
+  const { teacher } = useAuth();
   const { classroomId } = useParams<{ classroomId: string }>();
   const location = useLocation();
   const navigate = useNavigate();
@@ -122,18 +122,17 @@ export default function ManageClassPage() {
 
   const handleAdd = async () => {
     const parsed = parseName(nameInput);
-    if (!parsed) {
-      setActionError('Enter a name for the student.');
+    if (!parsed || !teacher) {
+      if (!parsed) setActionError('Enter a name for the student.');
       return;
     }
     setIsSubmitting(true);
     setActionError(null);
     try {
-      await ensureTenantSession();
       const supabase = getSupabaseClient();
       const { data, error } = await supabase
         .from('students')
-        .insert({ school_id: getTenantSchoolId(), classroom_id: classroomId, ...parsed })
+        .insert({ school_id: teacher.school_id, classroom_id: classroomId, ...parsed })
         .select('id, first_name, last_initial')
         .single();
       if (error) throw error;
@@ -156,7 +155,6 @@ export default function ManageClassPage() {
     setIsSubmitting(true);
     setActionError(null);
     try {
-      await ensureTenantSession();
       const supabase = getSupabaseClient();
       const { error } = await supabase.from('students').update(parsed).eq('id', modal.student.id);
       if (error) throw error;
@@ -174,7 +172,6 @@ export default function ManageClassPage() {
     setIsSubmitting(true);
     setActionError(null);
     try {
-      await ensureTenantSession();
       const supabase = getSupabaseClient();
       const { error } = await supabase.from('students').delete().eq('id', modal.student.id);
       if (error) throw error;
@@ -191,7 +188,6 @@ export default function ManageClassPage() {
     setIsSubmitting(true);
     setActionError(null);
     try {
-      await ensureTenantSession();
       const supabase = getSupabaseClient();
       const { error } = await supabase.from('classrooms').delete().eq('id', classroomId);
       if (error) throw error;
@@ -211,7 +207,6 @@ export default function ManageClassPage() {
     setIsSubmitting(true);
     setActionError(null);
     try {
-      await ensureTenantSession();
       const supabase = getSupabaseClient();
 
       // Check for a name clash among this school's other classes before

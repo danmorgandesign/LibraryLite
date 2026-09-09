@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ensureTenantSession, getSupabaseClient } from '../lib/supabaseClient';
+import { getSupabaseClient } from '../lib/supabaseClient';
 
 type Classroom = { id: string; class_label: string };
 type Student = { id: string; first_name: string; last_initial: string | null };
@@ -23,7 +23,6 @@ export default function SelectClassAndStudentPage({ bookTitle, isLoaning, error,
     let cancelled = false;
     (async () => {
       try {
-        await ensureTenantSession();
         const supabase = getSupabaseClient();
         const { data, error: fetchError } = await supabase.from('classrooms').select('id, class_label').order('class_label');
         if (fetchError) throw fetchError;

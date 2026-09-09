@@ -1,27 +1,29 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import HamburgerMenu from './HamburgerMenu';
-import { ensureTenantSession, getSupabaseClient, getTenantSchoolId } from '../../lib/supabaseClient';
+import { getSupabaseClient } from '../../lib/supabaseClient';
+import { useAuth } from '../../lib/auth';
 
-async function fetchSchoolName(): Promise<string | null> {
-  await ensureTenantSession();
+async function fetchSchoolName(schoolId: string): Promise<string | null> {
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase.from('schools').select('name').eq('id', getTenantSchoolId()).single();
+  const { data, error } = await supabase.from('schools').select('name').eq('id', schoolId).single();
   if (error) throw error;
   return data.name;
 }
 
 export default function Header() {
   const navigate = useNavigate();
+  const { teacher } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [schoolName, setSchoolName] = useState<string | null>(null);
   const headerRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
+    if (!teacher) return;
     let cancelled = false;
-    // Best-effort: a missing/misconfigured Supabase env var shouldn't take
-    // the whole header down, so a failure here just leaves the name blank.
-    fetchSchoolName()
+    // Best-effort: a failure here just leaves the name blank rather than
+    // taking the whole header down.
+    fetchSchoolName(teacher.school_id)
       .then((name) => {
         if (!cancelled) setSchoolName(name);
       })
@@ -29,7 +31,7 @@ export default function Header() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [teacher]);
 
   const navLinkClassName = ({ isActive }: { isActive: boolean }) =>
     `inline-flex min-h-[44px] items-center rounded-sm px-sm text-sm font-medium transition-colors hover:bg-surface-subtle hover:text-ink-primary ${
@@ -59,10 +61,14 @@ export default function Header() {
         </div>
 
         <nav aria-label="Primary" className="order-2 ml-auto flex shrink-0 items-center gap-xl lg:order-3 lg:ml-0">
-          {/* There's no real per-session login yet (see the note in
-              supabaseClient.ts), so this just routes back to the login
-              screen rather than actually clearing a session. */}
-          <button type="button" onClick={() => navigate('/login')} className={navLinkClassName({ isActive: false })}>
+          <button
+            type="button"
+            onClick={async () => {
+              await getSupabaseClient().auth.signOut();
+              navigate('/login');
+            }}
+            className={navLinkClassName({ isActive: false })}
+          >
             Logout
           </button>
           <NavLink to="/dashboard" className={navLinkClassName}>

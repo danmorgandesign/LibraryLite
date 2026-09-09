@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { useLocation } from 'react-router-dom';
 import AuthHeader from '../components/layout/AuthHeader';
-import { ensureTenantSession, getSupabaseClient, getTenantSchoolId } from '../lib/supabaseClient';
+import { getSupabaseClient } from '../lib/supabaseClient';
+import { useAuth } from '../lib/auth';
 
 type Teacher = {
   id: string;
@@ -30,7 +30,6 @@ function mapTeacherRow(row: {
 }
 
 async function fetchTeachers(): Promise<Teacher[]> {
-  await ensureTenantSession();
   const supabase = getSupabaseClient();
   const { data, error } = await supabase.from('teachers').select(TEACHER_SELECT).order('created_at');
   if (error) throw error;
@@ -44,7 +43,7 @@ async function fetchTeachers(): Promise<Teacher[]> {
 // Finds an existing classroom by name (case-insensitive) or creates one —
 // the "Class Name" fields here are free text since the class may not exist
 // yet, unlike Manage Teachers' dropdown of already-real classrooms.
-async function resolveClassroomId(className: string): Promise<string> {
+async function resolveClassroomId(schoolId: string, className: string): Promise<string> {
   const supabase = getSupabaseClient();
   const trimmed = className.trim();
 
@@ -61,37 +60,37 @@ async function resolveClassroomId(className: string): Promise<string> {
     // academic_year is NOT NULL with no natural default yet — there's no
     // year-picker UI anywhere in the app, so this hardcodes the current one
     // for now (matches ClassesPage's own "+ Add Class").
-    .insert({ school_id: getTenantSchoolId(), class_label: trimmed, academic_year: '2025-2026' })
+    .insert({ school_id: schoolId, class_label: trimmed, academic_year: '2025-2026' })
     .select('id')
     .single();
   if (createError) throw createError;
   return created.id;
 }
 
-async function inviteTeacher(email: string, className: string): Promise<Teacher> {
-  await ensureTenantSession();
+async function inviteTeacher(schoolId: string, email: string, className: string): Promise<Teacher> {
   const supabase = getSupabaseClient();
-  const classroomId = className.trim() ? await resolveClassroomId(className) : null;
+  const classroomId = className.trim() ? await resolveClassroomId(schoolId, className) : null;
 
   const { data, error } = await supabase
     .from('teachers')
-    .insert({ school_id: getTenantSchoolId(), email: email.trim(), classroom_id: classroomId })
+    .insert({ school_id: schoolId, email: email.trim(), classroom_id: classroomId })
     .select(TEACHER_SELECT)
     .single();
   if (error) throw error;
   return mapTeacherRow(data as unknown as Parameters<typeof mapTeacherRow>[0]);
 }
 
-async function addSelfAsTeacher(name: string, className: string): Promise<Teacher> {
-  await ensureTenantSession();
+// The admin's own teachers row already exists — register_school_and_admin
+// created it at signup — so "I also teach a class" is an update of that
+// row's classroom_id, not a new insert.
+async function assignOwnClassroom(teacherId: string, schoolId: string, className: string): Promise<Teacher> {
   const supabase = getSupabaseClient();
-  const classroomId = await resolveClassroomId(className);
+  const classroomId = await resolveClassroomId(schoolId, className);
 
   const { data, error } = await supabase
     .from('teachers')
-    // Already activated — this is the person currently completing
-    // onboarding, not someone waiting on an invite email.
-    .insert({ school_id: getTenantSchoolId(), name: name.trim(), classroom_id: classroomId, activated_at: new Date().toISOString() })
+    .update({ classroom_id: classroomId })
+    .eq('id', teacherId)
     .select(TEACHER_SELECT)
     .single();
   if (error) throw error;
@@ -99,9 +98,12 @@ async function addSelfAsTeacher(name: string, className: string): Promise<Teache
 }
 
 export default function AdminOnboardingPage() {
-  const location = useLocation();
-  const { schoolName, contactName } = (location.state as { schoolName?: string; contactName?: string } | null) ?? {};
+  // RequireAuth only redirects an admin away from here if they have no
+  // teachers row at all, so `teacher` is guaranteed non-null by the time
+  // this renders.
+  const { teacher, refreshTeacher } = useAuth();
 
+  const [schoolName, setSchoolName] = useState<string | null>(null);
   const [teachers, setTeachers] = useState<Teacher[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -129,13 +131,32 @@ export default function AdminOnboardingPage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!teacher) return;
+    let cancelled = false;
+    getSupabaseClient()
+      .from('schools')
+      .select('name')
+      .eq('id', teacher.school_id)
+      .single()
+      .then(({ data }) => {
+        if (!cancelled) setSchoolName(data?.name ?? null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [teacher]);
+
+  if (!teacher) return null;
+
   const handleAddSelf = async () => {
-    if (!contactName || !ownClassName.trim()) return;
+    if (!ownClassName.trim()) return;
     setIsAddingSelf(true);
     setSelfError(null);
     try {
-      const teacher = await addSelfAsTeacher(contactName, ownClassName);
-      setTeachers((prev) => [...(prev ?? []), teacher]);
+      const updated = await assignOwnClassroom(teacher.id, teacher.school_id, ownClassName);
+      setTeachers((prev) => [...(prev ?? []).filter((t) => t.id !== updated.id), updated]);
+      await refreshTeacher();
       setOwnClassName('');
       setTeachesOwnClass(false);
     } catch (err) {
@@ -150,8 +171,8 @@ export default function AdminOnboardingPage() {
     setIsAddingTeacher(true);
     setAddTeacherError(null);
     try {
-      const teacher = await inviteTeacher(teacherEmail, teacherClassName);
-      setTeachers((prev) => [...(prev ?? []), teacher]);
+      const invited = await inviteTeacher(teacher.school_id, teacherEmail, teacherClassName);
+      setTeachers((prev) => [...(prev ?? []), invited]);
       setTeacherEmail('');
       setTeacherClassName('');
     } catch (err) {
@@ -180,38 +201,38 @@ export default function AdminOnboardingPage() {
 
           <div className="mt-xl rounded-md border border-line bg-surface p-lg">
             <p className="text-sm font-medium text-ink-primary">Are you also teaching a class?</p>
-            <div className="mt-md flex flex-wrap items-center gap-md">
-              <label className="flex items-center gap-sm text-sm text-ink-primary">
-                <input
-                  type="checkbox"
-                  checked={teachesOwnClass}
-                  onChange={(e) => setTeachesOwnClass(e.target.checked)}
-                  className="size-4"
-                />
-                I also teach a class
-              </label>
-              <input
-                value={ownClassName}
-                onChange={(e) => setOwnClassName(e.target.value)}
-                disabled={!teachesOwnClass || isAddingSelf}
-                placeholder="e.g. Squirrels"
-                className="min-h-[48px] w-[260px] max-w-full rounded-md border border-line bg-surface-subtle px-md text-sm text-ink-primary placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-ink-primary/20 disabled:opacity-50"
-              />
-              <button
-                type="button"
-                disabled={!teachesOwnClass || !ownClassName.trim() || isAddingSelf}
-                onClick={handleAddSelf}
-                className="inline-flex min-h-[44px] items-center rounded-sm bg-accent px-lg py-sm text-sm font-medium text-ink-primary transition-opacity hover:opacity-90 disabled:opacity-60"
-              >
-                {isAddingSelf ? 'Adding…' : 'Add'}
-              </button>
-            </div>
-            {selfError && <p className="mt-sm text-sm text-red-600">{selfError}</p>}
-            {teachesOwnClass && !contactName && (
-              <p className="mt-sm text-sm text-ink-muted">
-                Your name wasn't carried over from registration — this only works when arriving here from Register
-                Yourself.
-              </p>
+            {teacher.classroom_id ? (
+              <p className="mt-md text-sm text-ink-muted">You're already set up teaching a class.</p>
+            ) : (
+              <>
+                <div className="mt-md flex flex-wrap items-center gap-md">
+                  <label className="flex items-center gap-sm text-sm text-ink-primary">
+                    <input
+                      type="checkbox"
+                      checked={teachesOwnClass}
+                      onChange={(e) => setTeachesOwnClass(e.target.checked)}
+                      className="size-4"
+                    />
+                    I also teach a class
+                  </label>
+                  <input
+                    value={ownClassName}
+                    onChange={(e) => setOwnClassName(e.target.value)}
+                    disabled={!teachesOwnClass || isAddingSelf}
+                    placeholder="e.g. Squirrels"
+                    className="min-h-[48px] w-[260px] max-w-full rounded-md border border-line bg-surface-subtle px-md text-sm text-ink-primary placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-ink-primary/20 disabled:opacity-50"
+                  />
+                  <button
+                    type="button"
+                    disabled={!teachesOwnClass || !ownClassName.trim() || isAddingSelf}
+                    onClick={handleAddSelf}
+                    className="inline-flex min-h-[44px] items-center rounded-sm bg-accent px-lg py-sm text-sm font-medium text-ink-primary transition-opacity hover:opacity-90 disabled:opacity-60"
+                  >
+                    {isAddingSelf ? 'Adding…' : 'Add'}
+                  </button>
+                </div>
+                {selfError && <p className="mt-sm text-sm text-red-600">{selfError}</p>}
+              </>
             )}
           </div>
 
@@ -230,8 +251,9 @@ export default function AdminOnboardingPage() {
           </div>
 
           <p className="mt-lg text-sm text-ink-muted">
-            We'll email the teacher an invite link so they can set a password and get started. Class name is optional —
-            they can add it themselves later.
+            We don't send invite emails yet — ask the teacher to visit the Login page and choose "Invited by your
+            school?", then sign up using this exact email address to be linked automatically. Class name is
+            optional — they can add it themselves later.
           </p>
 
           <div className="mt-lg flex flex-wrap items-end gap-md">
@@ -271,12 +293,12 @@ export default function AdminOnboardingPage() {
 
           {teachers && teachers.length > 0 && (
             <div className="mt-lg grid grid-cols-1 gap-lg sm:grid-cols-2 lg:grid-cols-3">
-              {teachers.map((teacher) => (
-                <div key={teacher.id} className="flex flex-col gap-xs rounded-md border border-line bg-surface p-lg">
-                  <p className="font-semibold text-ink-primary">{teacher.name ?? teacher.email}</p>
-                  {teacher.name && teacher.email && <p className="text-sm text-ink-muted">{teacher.email}</p>}
-                  {teacher.classroomLabel && <p className="text-sm text-ink-muted">Class: {teacher.classroomLabel}</p>}
-                  {!teacher.activatedAt && <p className="text-sm font-medium text-amber-700">Awaiting Activation</p>}
+              {teachers.map((t) => (
+                <div key={t.id} className="flex flex-col gap-xs rounded-md border border-line bg-surface p-lg">
+                  <p className="font-semibold text-ink-primary">{t.name ?? t.email}</p>
+                  {t.name && t.email && <p className="text-sm text-ink-muted">{t.email}</p>}
+                  {t.classroomLabel && <p className="text-sm text-ink-muted">Class: {t.classroomLabel}</p>}
+                  {!t.activatedAt && <p className="text-sm font-medium text-amber-700">Awaiting Activation</p>}
                   <div className="mt-sm flex gap-sm">
                     <button
                       type="button"

@@ -1,26 +1,25 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/layout/Header';
-import { ensureTenantSession, getSupabaseClient, getTenantSchoolId } from '../lib/supabaseClient';
+import { getSupabaseClient } from '../lib/supabaseClient';
+import { useAuth } from '../lib/auth';
 
 type Classroom = { id: string; class_label: string };
 
 async function fetchClassrooms(): Promise<Classroom[]> {
-  await ensureTenantSession();
   const supabase = getSupabaseClient();
   const { data, error } = await supabase.from('classrooms').select('id, class_label').order('class_label');
   if (error) throw error;
   return data;
 }
 
-async function addClassroom(classLabel: string): Promise<Classroom> {
-  await ensureTenantSession();
+async function addClassroom(schoolId: string, classLabel: string): Promise<Classroom> {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from('classrooms')
     // academic_year is NOT NULL in the schema with no natural default yet —
     // there's no year-picker UI, so this hardcodes the current one for now.
-    .insert({ school_id: getTenantSchoolId(), class_label: classLabel, academic_year: '2025-2026' })
+    .insert({ school_id: schoolId, class_label: classLabel, academic_year: '2025-2026' })
     .select('id, class_label')
     .single();
   if (error) throw error;
@@ -29,6 +28,7 @@ async function addClassroom(classLabel: string): Promise<Classroom> {
 
 export default function ClassesPage() {
   const navigate = useNavigate();
+  const { teacher } = useAuth();
   const [classrooms, setClassrooms] = useState<Classroom[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -52,10 +52,10 @@ export default function ClassesPage() {
   const isLoading = classrooms === null && !error;
 
   const handleAddClass = async () => {
-    if (!nameInput.trim()) return;
+    if (!nameInput.trim() || !teacher) return;
     setIsAdding(true);
     try {
-      const classroom = await addClassroom(nameInput.trim());
+      const classroom = await addClassroom(teacher.school_id, nameInput.trim());
       setClassrooms((prev) => [...(prev ?? []), classroom].sort((a, b) => a.class_label.localeCompare(b.class_label)));
       setIsAddModalOpen(false);
       setNameInput('');

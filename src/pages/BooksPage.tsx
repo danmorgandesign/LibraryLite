@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/layout/Header';
 import BookDetailModal from '../components/BookDetailModal';
-import { ensureTenantSession, getSupabaseClient } from '../lib/supabaseClient';
+import { getSupabaseClient } from '../lib/supabaseClient';
 
 type BookStatus = 'available' | 'on-loan';
 
@@ -55,7 +55,6 @@ function StatusBadge({ status, isRetired }: { status: BookStatus; isRetired: boo
 }
 
 async function fetchBooks(): Promise<Book[]> {
-  await ensureTenantSession();
   const supabase = getSupabaseClient();
 
   // Embedded resource query: pulls each book's active (unreturned) loans,
@@ -109,14 +108,12 @@ async function fetchBooks(): Promise<Book[]> {
 }
 
 async function retireBook(bookId: string): Promise<void> {
-  await ensureTenantSession();
   const supabase = getSupabaseClient();
   const { error } = await supabase.from('books').update({ retired_at: new Date().toISOString() }).eq('id', bookId);
   if (error) throw error;
 }
 
 async function unretireBook(bookId: string): Promise<void> {
-  await ensureTenantSession();
   const supabase = getSupabaseClient();
   const { error } = await supabase.from('books').update({ retired_at: null }).eq('id', bookId);
   if (error) throw error;

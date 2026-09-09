@@ -1,21 +1,20 @@
 import { useEffect, useState } from 'react';
 import Header from '../components/layout/Header';
-import { ensureTenantSession, getSupabaseClient } from '../lib/supabaseClient';
+import { getSupabaseClient } from '../lib/supabaseClient';
+import { useAuth } from '../lib/auth';
 
 type Classroom = { id: string; class_label: string };
 
 async function fetchClassrooms(): Promise<Classroom[]> {
-  await ensureTenantSession();
   const supabase = getSupabaseClient();
   const { data, error } = await supabase.from('classrooms').select('id, class_label').order('class_label');
   if (error) throw error;
   return data;
 }
 
-// There's no real per-session user identity yet (see the note in
-// supabaseClient.ts — this app is a shared anonymous kiosk), so the profile
-// fields themselves are local placeholder state rather than a real account
-// record.
+// Editing here is still local-only — Save updates this page's own state,
+// not the teachers row — matching the rest of the prototype's edit UI
+// until real profile persistence is built.
 function ProfileField({
   label,
   value,
@@ -62,9 +61,9 @@ function ProfileField({
 }
 
 export default function ProfilePage() {
-  const [name, setName] = useState('Ms Patel');
-  const [className, setClassName] = useState('Otters');
-  const [email, setEmail] = useState('priya.patel@riverbendprimary.co.uk');
+  // RequireAuth guarantees a signed-in user with a linked teachers row by
+  // the time this page renders.
+  const { user, teacher } = useAuth();
 
   const [classrooms, setClassrooms] = useState<Classroom[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -82,6 +81,20 @@ export default function ProfilePage() {
       cancelled = true;
     };
   }, []);
+
+  const ownClassLabel = classrooms?.find((c) => c.id === teacher?.classroom_id)?.class_label ?? 'Not teaching a class';
+
+  const [name, setName] = useState(teacher?.name ?? '');
+  const [className, setClassName] = useState(ownClassLabel);
+  const [email, setEmail] = useState(user?.email ?? '');
+
+  // classrooms loads asynchronously after mount, so the seeded className
+  // above is often still the "Not teaching a class" fallback at first
+  // render — sync it once the real label is known.
+  useEffect(() => {
+    setClassName(ownClassLabel);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [classrooms]);
 
   return (
     <>

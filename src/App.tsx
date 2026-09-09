@@ -1,4 +1,5 @@
 import { HashRouter, Route, Routes } from 'react-router-dom';
+import { AuthProvider, RequireAuth } from './lib/auth';
 import LandingPage from './pages/LandingPage';
 import RegisterSchoolPage from './pages/RegisterSchoolPage';
 import RegisterYourselfPage from './pages/RegisterYourselfPage';
@@ -26,28 +27,113 @@ import TeacherOnboardingPage from './pages/TeacherOnboardingPage';
 export default function App() {
   return (
     <HashRouter>
-      <Routes>
-        {/* Public / pre-auth */}
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/register-school" element={<RegisterSchoolPage />} />
-        <Route path="/register-yourself" element={<RegisterYourselfPage />} />
-        <Route path="/admin-onboarding" element={<AdminOnboardingPage />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/teacher-onboarding/with-class" element={<TeacherOnboardingPage hasClass />} />
-        <Route path="/teacher-onboarding/without-class" element={<TeacherOnboardingPage hasClass={false} />} />
+      <AuthProvider>
+        <Routes>
+          {/* Public / pre-auth — no session required */}
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/register-school" element={<RegisterSchoolPage />} />
+          <Route path="/register-yourself" element={<RegisterYourselfPage />} />
+          <Route path="/login" element={<LoginPage />} />
+          {/* Not signed in yet when a just-invited teacher first lands here
+              (they sign up as part of this page), so it can't sit behind
+              RequireAuth like the rest of "inside the app" does. */}
+          <Route path="/teacher-onboarding" element={<TeacherOnboardingPage />} />
 
-        {/* Inside the app */}
-        <Route path="/dashboard" element={<DashboardPage />} />
-        <Route path="/scan" element={<ScanBookPage />} />
-        <Route path="/books" element={<BooksPage />} />
-        <Route path="/classes" element={<ClassesPage />} />
-        <Route path="/classes/:classroomId/manage" element={<ManageClassPage />} />
-        <Route path="/classes/:classroomId/loans" element={<ClassLoansPage />} />
-        <Route path="/students" element={<StudentsPage />} />
-        <Route path="/students/:studentId" element={<StudentDetailPage />} />
-        <Route path="/teachers" element={<ManageTeachersPage />} />
-        <Route path="/profile" element={<ProfilePage />} />
-      </Routes>
+          {/* Inside the app — requires a real session, and a completed
+              admin/teacher onboarding (RequireAuth redirects to
+              /teacher-onboarding otherwise). admin-onboarding moved in here
+              since it now reads the signed-in admin from context instead of
+              router state. */}
+          <Route
+            path="/admin-onboarding"
+            element={
+              <RequireAuth>
+                <AdminOnboardingPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/dashboard"
+            element={
+              <RequireAuth>
+                <DashboardPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/scan"
+            element={
+              <RequireAuth>
+                <ScanBookPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/books"
+            element={
+              <RequireAuth>
+                <BooksPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/classes"
+            element={
+              <RequireAuth>
+                <ClassesPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/classes/:classroomId/manage"
+            element={
+              <RequireAuth>
+                <ManageClassPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/classes/:classroomId/loans"
+            element={
+              <RequireAuth>
+                <ClassLoansPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/students"
+            element={
+              <RequireAuth>
+                <StudentsPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/students/:studentId"
+            element={
+              <RequireAuth>
+                <StudentDetailPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/teachers"
+            element={
+              <RequireAuth>
+                <ManageTeachersPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <RequireAuth>
+                <ProfilePage />
+              </RequireAuth>
+            }
+          />
+        </Routes>
+      </AuthProvider>
     </HashRouter>
   );
 }

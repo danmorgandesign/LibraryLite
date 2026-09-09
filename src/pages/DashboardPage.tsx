@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/layout/Header';
-import { ensureTenantSession, getSupabaseClient } from '../lib/supabaseClient';
+import { getSupabaseClient } from '../lib/supabaseClient';
 
 type StudentSummary = {
   id: string;
@@ -20,7 +20,6 @@ function formatName(first: string, lastInitial: string | null) {
 }
 
 async function fetchRoster(): Promise<StudentSummary[]> {
-  await ensureTenantSession();
   const supabase = getSupabaseClient();
 
   const { data, error } = await supabase

@@ -1,11 +1,34 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AuthHeader from '../components/layout/AuthHeader';
+import { getSupabaseClient } from '../lib/supabaseClient';
 
 export default function LoginPage() {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async () => {
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      const supabase = getSupabaseClient();
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
+      if (signInError) throw signInError;
+      // RequireAuth handles redirecting on to /teacher-onboarding instead
+      // if this account hasn't finished onboarding yet.
+      navigate('/dashboard');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not log in.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <>
@@ -22,9 +45,7 @@ export default function LoginPage() {
           className="w-full max-w-xl rounded-md border border-line bg-surface p-2xl shadow-sm"
           onSubmit={(e) => {
             e.preventDefault();
-            // No real auth behind this prototype — any submitted credentials
-            // just take you into the app.
-            navigate('/dashboard');
+            handleSubmit();
           }}
         >
           <h1 className="text-2xl font-semibold text-ink-primary">Log In</h1>
@@ -62,11 +83,14 @@ export default function LoginPage() {
             </label>
           </div>
 
+          {error && <p className="mt-md text-sm text-red-600">{error}</p>}
+
           <button
             type="submit"
-            className="mt-lg inline-flex min-h-[44px] w-full items-center justify-center rounded-sm bg-accent px-lg py-sm text-base font-medium text-ink-primary transition-opacity hover:opacity-90"
+            disabled={isSubmitting}
+            className="mt-lg inline-flex min-h-[44px] w-full items-center justify-center rounded-sm bg-accent px-lg py-sm text-base font-medium text-ink-primary transition-opacity hover:opacity-90 disabled:opacity-60"
           >
-            Log In
+            {isSubmitting ? 'Logging in…' : 'Log In'}
           </button>
 
           <div className="mt-lg flex items-center gap-md">
@@ -98,6 +122,13 @@ export default function LoginPage() {
             Don't have an account?{' '}
             <button type="button" onClick={() => navigate('/register-school')} className="font-medium text-ink-primary underline-offset-2 hover:underline">
               Register Interest
+            </button>
+          </p>
+
+          <p className="mt-xs text-center text-sm text-ink-muted">
+            Invited by your school?{' '}
+            <button type="button" onClick={() => navigate('/teacher-onboarding')} className="font-medium text-ink-primary underline-offset-2 hover:underline">
+              Set up your teacher account
             </button>
           </p>
         </form>

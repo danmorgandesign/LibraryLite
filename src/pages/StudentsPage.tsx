@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import Header from '../components/layout/Header';
-import { ensureTenantSession, getSupabaseClient } from '../lib/supabaseClient';
+import { getSupabaseClient } from '../lib/supabaseClient';
 
 type Student = { id: string; first_name: string; last_initial: string | null };
 type StudentRow = Student & {
@@ -30,7 +30,6 @@ function formatName(student: Student) {
 }
 
 async function fetchClassrooms(): Promise<Classroom[]> {
-  await ensureTenantSession();
   const supabase = getSupabaseClient();
   const { data, error } = await supabase.from('classrooms').select('id, class_label').order('class_label');
   if (error) throw error;
@@ -38,7 +37,6 @@ async function fetchClassrooms(): Promise<Classroom[]> {
 }
 
 async function fetchStudents(): Promise<StudentRow[]> {
-  await ensureTenantSession();
   const supabase = getSupabaseClient();
 
   const { data, error } = await supabase

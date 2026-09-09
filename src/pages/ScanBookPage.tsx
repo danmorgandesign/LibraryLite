@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BarcodeDetector } from 'barcode-detector/ponyfill';
-import { ensureTenantSession, getSupabaseClient, getTenantSchoolId } from '../lib/supabaseClient';
+import { getSupabaseClient } from '../lib/supabaseClient';
+import { useAuth } from '../lib/auth';
 import ConfirmationScreen from '../components/ConfirmationScreen';
 import NotInCataloguePage from './NotInCataloguePage';
 import BarcodeNotFoundPage from './BarcodeNotFoundPage';
@@ -112,7 +113,6 @@ async function lookupByTitleAndAuthor(title: string, author: string): Promise<{ 
 
 async function lookupBarcode(barcode: string): Promise<ScanResult> {
   const supabase = getSupabaseClient();
-  await ensureTenantSession();
 
   const { data: book, error: bookError } = await supabase
     .from('books')
@@ -175,13 +175,13 @@ async function resolveCoverMatch(originalBarcode: string, title: string, author:
 }
 
 async function addBookToCatalogue(params: {
+  schoolId: string;
   barcode: string;
   title: string | null;
   author: string | null;
   coverUrl: string | null;
 }): Promise<Book> {
   const supabase = getSupabaseClient();
-  await ensureTenantSession();
 
   const { data, error } = await supabase
     .from('books')
@@ -190,7 +190,7 @@ async function addBookToCatalogue(params: {
     // a placeholder built from the barcode rather than blocking the add.
     // There's no rename UI yet, so this is a known rough edge, not final.
     .insert({
-      school_id: getTenantSchoolId(),
+      school_id: params.schoolId,
       barcode: params.barcode,
       title: params.title ?? `Book ${params.barcode}`,
       author: params.author,
@@ -203,12 +203,11 @@ async function addBookToCatalogue(params: {
   return { id: data.id, title: data.title, author: data.author, coverUrl: params.coverUrl };
 }
 
-async function createLoan(bookId: string, studentId: string): Promise<void> {
+async function createLoan(schoolId: string, bookId: string, studentId: string): Promise<void> {
   const supabase = getSupabaseClient();
-  await ensureTenantSession();
 
   const { error } = await supabase.from('loans').insert({
-    school_id: getTenantSchoolId(),
+    school_id: schoolId,
     book_id: bookId,
     student_id: studentId,
   });
@@ -218,7 +217,6 @@ async function createLoan(bookId: string, studentId: string): Promise<void> {
 
 async function returnLoan(bookId: string): Promise<void> {
   const supabase = getSupabaseClient();
-  await ensureTenantSession();
 
   const { error } = await supabase
     .from('loans')
@@ -231,6 +229,7 @@ async function returnLoan(bookId: string): Promise<void> {
 
 export default function ScanBookPage() {
   const navigate = useNavigate();
+  const { teacher } = useAuth();
   // Scan can be launched from almost any page (the header's "Scan a Book"
   // pill, or the landing page's hero CTA) — going back to wherever that was
   // beats the old hardcoded "always return to the landing page" behavior.
@@ -344,6 +343,9 @@ export default function ScanBookPage() {
 
   const resetScan = () => setScanResult({ status: 'scanning' });
 
+  // RequireAuth guarantees this by the time the route renders.
+  if (!teacher) return null;
+
   if (scanResult.status === 'not-in-catalogue') {
     const { barcode, title, author, coverUrl } = scanResult;
 
@@ -359,7 +361,7 @@ export default function ScanBookPage() {
           setIsAddingToCatalogue(true);
           setAddToCatalogueError(null);
           try {
-            const book = await addBookToCatalogue({ barcode, title, author, coverUrl });
+            const book = await addBookToCatalogue({ schoolId: teacher.school_id, barcode, title, author, coverUrl });
             setScanResult({ status: 'selecting-student', book });
           } catch (err) {
             setAddToCatalogueError(err instanceof Error ? err.message : 'Could not add this book — try again.');
@@ -371,7 +373,7 @@ export default function ScanBookPage() {
           setIsAddingToCatalogue(true);
           setAddToCatalogueError(null);
           try {
-            await addBookToCatalogue({ barcode, title, author, coverUrl });
+            await addBookToCatalogue({ schoolId: teacher.school_id, barcode, title, author, coverUrl });
             resetScan();
           } catch (err) {
             setAddToCatalogueError(err instanceof Error ? err.message : 'Could not add this book — try again.');
@@ -440,7 +442,7 @@ export default function ScanBookPage() {
           setIsAddingToCatalogue(true);
           setAddToCatalogueError(null);
           try {
-            const book = await addBookToCatalogue({ barcode, title, author, coverUrl: null });
+            const book = await addBookToCatalogue({ schoolId: teacher.school_id, barcode, title, author, coverUrl: null });
             setScanResult({ status: 'attached', book });
           } catch (err) {
             setAddToCatalogueError(err instanceof Error ? err.message : 'Could not save this book — try again.');
@@ -516,7 +518,7 @@ export default function ScanBookPage() {
           setIsLoaning(true);
           setLoanError(null);
           try {
-            await createLoan(book.id, studentId);
+            await createLoan(teacher.school_id, book.id, studentId);
             setScanResult({ status: 'loaned', book });
           } catch (err) {
             setLoanError(err instanceof Error ? err.message : 'Could not create the loan — try again.');

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import Header from '../components/layout/Header';
-import { ensureTenantSession, getSupabaseClient, getTenantSchoolId } from '../lib/supabaseClient';
+import { getSupabaseClient } from '../lib/supabaseClient';
+import { useAuth } from '../lib/auth';
 
 type Teacher = {
   id: string;
@@ -34,7 +35,6 @@ function mapTeacherRow(row: {
 const TEACHER_SELECT = 'id, name, email, activated_at, classroom_id, classrooms(class_label)';
 
 async function fetchTeachers(): Promise<Teacher[]> {
-  await ensureTenantSession();
   const supabase = getSupabaseClient();
   const { data, error } = await supabase.from('teachers').select(TEACHER_SELECT).order('name');
   if (error) throw error;
@@ -46,19 +46,17 @@ async function fetchTeachers(): Promise<Teacher[]> {
 }
 
 async function fetchClassrooms(): Promise<Classroom[]> {
-  await ensureTenantSession();
   const supabase = getSupabaseClient();
   const { data, error } = await supabase.from('classrooms').select('id, class_label').order('class_label');
   if (error) throw error;
   return data;
 }
 
-async function addTeacher(name: string, classroomId: string | null): Promise<Teacher> {
-  await ensureTenantSession();
+async function addTeacher(schoolId: string, name: string, classroomId: string | null): Promise<Teacher> {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from('teachers')
-    .insert({ school_id: getTenantSchoolId(), name, classroom_id: classroomId })
+    .insert({ school_id: schoolId, name, classroom_id: classroomId })
     .select(TEACHER_SELECT)
     .single();
   if (error) throw error;
@@ -66,7 +64,6 @@ async function addTeacher(name: string, classroomId: string | null): Promise<Tea
 }
 
 async function updateTeacher(id: string, name: string, classroomId: string | null): Promise<Teacher> {
-  await ensureTenantSession();
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from('teachers')
@@ -79,7 +76,6 @@ async function updateTeacher(id: string, name: string, classroomId: string | nul
 }
 
 async function removeTeacher(id: string): Promise<void> {
-  await ensureTenantSession();
   const supabase = getSupabaseClient();
   const { error } = await supabase.from('teachers').delete().eq('id', id);
   if (error) throw error;
@@ -96,6 +92,7 @@ function ModalShell({ children }: { children: React.ReactNode }) {
 }
 
 export default function ManageTeachersPage() {
+  const { teacher: currentTeacher } = useAuth();
   const [teachers, setTeachers] = useState<Teacher[] | null>(null);
   const [classrooms, setClassrooms] = useState<Classroom[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -132,11 +129,11 @@ export default function ManageTeachersPage() {
   };
 
   const handleAdd = async () => {
-    if (!nameInput.trim()) return;
+    if (!nameInput.trim() || !currentTeacher) return;
     setIsSubmitting(true);
     setActionError(null);
     try {
-      const teacher = await addTeacher(nameInput.trim(), classroomIdInput || null);
+      const teacher = await addTeacher(currentTeacher.school_id, nameInput.trim(), classroomIdInput || null);
       setTeachers((prev) =>
         [...(prev ?? []), teacher].sort((a, b) => (a.name ?? a.email ?? '').localeCompare(b.name ?? b.email ?? '')),
       );
