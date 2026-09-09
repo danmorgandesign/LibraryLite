@@ -157,14 +157,27 @@ export default function StudentsPage() {
 
       <main className="min-h-screen px-lg pb-2xl pt-[104px] lg:px-2xl">
         <div className="mx-auto max-w-5xl">
-          <div className="flex items-start justify-between">
-            <div>
-              <h1 className="text-2xl font-semibold text-ink-primary">Students</h1>
-              <p className="mt-xs text-sm text-ink-muted">Every student across all classes.</p>
+          <div>
+            <h1 className="text-2xl font-semibold text-ink-primary">Students</h1>
+            <p className="mt-xs text-sm text-ink-muted">Every student across all classes.</p>
+          </div>
+
+          <div className="mt-lg flex items-center gap-md">
+            <div className="max-w-sm flex-1">
+              <label htmlFor="student-search" className="sr-only">
+                Search students by name
+              </label>
+              <input
+                id="student-search"
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search by name…"
+                className="w-full rounded-md border border-line bg-surface px-md py-xs text-sm text-ink-primary placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-ink-primary/20"
+              />
             </div>
 
-            <div className="relative flex items-center gap-sm">
-              <span className="text-sm text-ink-muted">Sort by</span>
+            <div className="relative shrink-0">
               <button
                 type="button"
                 onClick={() => setSortMenuOpen((v) => !v)}
@@ -192,20 +205,6 @@ export default function StudentsPage() {
                 </div>
               )}
             </div>
-          </div>
-
-          <div className="mt-lg">
-            <label htmlFor="student-search" className="sr-only">
-              Search students by name
-            </label>
-            <input
-              id="student-search"
-              type="search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by name…"
-              className="w-full max-w-sm rounded-md border border-line bg-surface px-md py-xs text-sm text-ink-primary placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-ink-primary/20"
-            />
           </div>
 
           {!isLoading && !error && classrooms && classrooms.length > 0 && (
