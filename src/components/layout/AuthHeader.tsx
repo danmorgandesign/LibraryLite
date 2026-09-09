@@ -4,11 +4,14 @@ import { Link, NavLink } from 'react-router-dom';
 // landing page) just scroll to a section on the current page instead
 // (`onClick`) — HashRouter already uses "#" for routing, so a real in-page
 // anchor link isn't an option here.
-type NavItem = { label: string; to: string } | { label: string; onClick: () => void };
+type NavItem = ({ label: string; to: string } | { label: string; onClick: () => void }) & { variant?: 'cta' };
 
 type Props = {
   navItems: NavItem[];
 };
+
+const ctaClassName =
+  'inline-flex min-h-[44px] items-center rounded-sm bg-accent px-md text-sm font-medium text-ink-primary transition-opacity hover:opacity-90';
 
 // The pre-auth pages (landing, register, login) and the one-time onboarding
 // pages each show a different, shorter nav than the main app's Header, so
@@ -32,11 +35,16 @@ export default function AuthHeader({ navItems }: Props) {
         <nav aria-label="Primary" className="flex items-center gap-xl">
           {navItems.map((item) =>
             'to' in item ? (
-              <NavLink key={item.label} to={item.to} className={navLinkClassName}>
+              <NavLink key={item.label} to={item.to} className={item.variant === 'cta' ? ctaClassName : navLinkClassName}>
                 {item.label}
               </NavLink>
             ) : (
-              <button key={item.label} type="button" onClick={item.onClick} className={navButtonClassName}>
+              <button
+                key={item.label}
+                type="button"
+                onClick={item.onClick}
+                className={item.variant === 'cta' ? ctaClassName : navButtonClassName}
+              >
                 {item.label}
               </button>
             ),

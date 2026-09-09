@@ -34,7 +34,7 @@ export default function LandingPage() {
         navItems={[
           { label: 'Pricing', onClick: () => pricingRef.current?.scrollIntoView({ behavior: 'smooth' }) },
           { label: 'Login', to: '/login' },
-          { label: 'Register School', to: '/register-school' },
+          { label: 'Register School', to: '/register-school', variant: 'cta' },
         ]}
       />
 
