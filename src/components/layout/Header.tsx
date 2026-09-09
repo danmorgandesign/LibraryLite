@@ -1,7 +1,11 @@
-import { Link, NavLink, useLocation } from 'react-router-dom';
+import { useState } from 'react';
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
+import HamburgerMenu from './HamburgerMenu';
 
 export default function Header() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const [menuOpen, setMenuOpen] = useState(false);
   // The dashboard has its own "Scan Book" action card, so the header pill
   // would just duplicate it there.
   const hasOwnScanCta = location.pathname === '/dashboard';
@@ -31,17 +35,14 @@ export default function Header() {
         </div>
 
         <nav aria-label="Primary" className="order-2 ml-auto flex shrink-0 items-center gap-xl lg:order-3 lg:ml-0">
-          <NavLink to="/books" className={navLinkClassName}>
-            Books
-          </NavLink>
-          <NavLink to="/classes" className={navLinkClassName}>
-            Classes
-          </NavLink>
-          <NavLink to="/students" className={navLinkClassName}>
-            Students
-          </NavLink>
-          <NavLink to="/teachers" className={navLinkClassName}>
-            Teachers
+          {/* There's no real per-session login yet (see the note in
+              supabaseClient.ts), so this just routes back to the login
+              screen rather than actually clearing a session. */}
+          <button type="button" onClick={() => navigate('/login')} className={navLinkClassName({ isActive: false })}>
+            Logout
+          </button>
+          <NavLink to="/dashboard" className={navLinkClassName}>
+            Dashboard
           </NavLink>
           {!hasOwnScanCta && (
             <Link
@@ -51,8 +52,19 @@ export default function Header() {
               Scan a Book
             </Link>
           )}
+          <button
+            type="button"
+            onClick={() => setMenuOpen(true)}
+            aria-label="Open menu"
+            aria-expanded={menuOpen}
+            className="inline-flex min-h-[44px] min-w-[38px] items-center justify-center rounded-sm text-lg text-ink-primary hover:bg-surface-subtle"
+          >
+            ☰
+          </button>
         </nav>
       </div>
+
+      <HamburgerMenu isOpen={menuOpen} onClose={() => setMenuOpen(false)} />
     </header>
   );
 }
