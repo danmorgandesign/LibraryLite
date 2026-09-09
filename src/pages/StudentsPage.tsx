@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import Header from '../components/layout/Header';
 import { ensureTenantSession, getSupabaseClient } from '../lib/supabaseClient';
 
@@ -77,24 +77,46 @@ async function fetchStudents(): Promise<StudentRow[]> {
   });
 }
 
+function isSortKey(value: string | null): value is SortKey {
+  return SORT_OPTIONS.some((o) => o.key === value);
+}
+
 export default function StudentsPage() {
   const navigate = useNavigate();
-  const goToStudent = (student: Student) => navigate(`/students/${student.id}`);
-  // The initial class filter arrives as a query param (e.g. clicking a class
-  // name on the Classes page links to /students?class=<id>) rather than
-  // route state, so a direct link or a refresh still lands pre-filtered.
-  const [searchParams] = useSearchParams();
-  const initialClassroomId = searchParams.get('class') ?? undefined;
+  const location = useLocation();
+  // Filters live in the URL (not just component state) so that clicking
+  // "Details" and then "Back to Students" — or a plain refresh — lands back
+  // on the same filtered/sorted view instead of resetting it. Also how a
+  // link from the Classes page pre-filters via /students?class=<id>.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const goToStudent = (student: Student) =>
+    navigate(`/students/${student.id}`, { state: { studentsReturnTo: location.pathname + location.search } });
 
   const [classrooms, setClassrooms] = useState<Classroom[] | null>(null);
   const [students, setStudents] = useState<StudentRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeClassroomIds, setActiveClassroomIds] = useState<Set<string>>(
-    () => new Set(initialClassroomId ? [initialClassroomId] : []),
+    () => new Set(searchParams.getAll('class')),
   );
-  const [sortBy, setSortBy] = useState<SortKey>('alphabet');
+  const [sortBy, setSortBy] = useState<SortKey>(() => {
+    const fromUrl = searchParams.get('sort');
+    return isSortKey(fromUrl) ? fromUrl : 'alphabet';
+  });
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(() => searchParams.get('q') ?? '');
+
+  // Keep the URL in sync with the filters as they change, rather than only
+  // reading them once on load.
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (search.trim()) params.set('q', search.trim());
+    if (sortBy !== 'alphabet') params.set('sort', sortBy);
+    activeClassroomIds.forEach((id) => params.append('class', id));
+    setSearchParams(params, { replace: true });
+    // setSearchParams is stable across renders (from react-router), so it's
+    // safe to omit here — including it would be a no-op either way.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, sortBy, activeClassroomIds]);
 
   useEffect(() => {
     let cancelled = false;

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import Header from '../components/layout/Header';
 import { ensureTenantSession, getSupabaseClient } from '../lib/supabaseClient';
 
@@ -97,7 +97,14 @@ async function markReturned(loanId: string): Promise<void> {
 export default function StudentDetailPage() {
   const { studentId } = useParams<{ studentId: string }>();
   const navigate = useNavigate();
-  const goBack = () => navigate('/students');
+  const location = useLocation();
+  // Arrived here via the Students list "Details" link? That page passes its
+  // current filters/search/sort along in the URL it was on, so going back
+  // lands on the same filtered view instead of a reset one. Anything else
+  // (a direct link, Manage Class's roster, Class Loans) just goes to the
+  // unfiltered list.
+  const studentsReturnTo = (location.state as { studentsReturnTo?: string } | null)?.studentsReturnTo;
+  const goBack = () => navigate(studentsReturnTo ?? '/students');
 
   const [student, setStudent] = useState<Student | null>(null);
   const [current, setCurrent] = useState<CurrentLoan[] | null>(null);
