@@ -1,11 +1,35 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import HamburgerMenu from './HamburgerMenu';
+import { ensureTenantSession, getSupabaseClient, getTenantSchoolId } from '../../lib/supabaseClient';
+
+async function fetchSchoolName(): Promise<string | null> {
+  await ensureTenantSession();
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.from('schools').select('name').eq('id', getTenantSchoolId()).single();
+  if (error) throw error;
+  return data.name;
+}
 
 export default function Header() {
   const location = useLocation();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [schoolName, setSchoolName] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    // Best-effort: a missing/misconfigured Supabase env var shouldn't take
+    // the whole header down, so a failure here just leaves the name blank.
+    fetchSchoolName()
+      .then((name) => {
+        if (!cancelled) setSchoolName(name);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   // The dashboard has its own "Scan Book" action card, so the header pill
   // would just duplicate it there.
   const hasOwnScanCta = location.pathname === '/dashboard';
@@ -18,8 +42,11 @@ export default function Header() {
   return (
     <header className="fixed inset-x-0 top-0 z-10 border-b border-line bg-surface/95 backdrop-blur">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-md px-lg py-md lg:flex-nowrap lg:justify-between">
-        <Link to="/dashboard" className="shrink-0 font-sans text-2xl font-bold tracking-tight text-ink-primary lg:text-3xl">
-          Library Lite
+        <Link to="/dashboard" className="shrink-0">
+          <span className="block font-sans text-2xl font-bold tracking-tight text-ink-primary lg:text-3xl">
+            Library Lite
+          </span>
+          {schoolName && <span className="block text-xs text-ink-muted">{schoolName}</span>}
         </Link>
 
         <div className="order-3 w-full lg:order-2 lg:w-auto lg:max-w-sm lg:flex-1 lg:px-xl">
