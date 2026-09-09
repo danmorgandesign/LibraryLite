@@ -282,15 +282,8 @@ export default function ManageClassPage() {
             </button>
           </div>
 
-          <div className="mt-xl flex items-center justify-between">
+          <div className="mt-xl">
             <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Students</p>
-            <button
-              type="button"
-              onClick={() => setModal({ type: 'add' })}
-              className="inline-flex min-h-[44px] items-center rounded-sm border border-line bg-surface px-md text-sm font-medium text-ink-primary transition-opacity hover:opacity-80"
-            >
-              + Add Student
-            </button>
           </div>
 
           {isLoading && <p className="mt-lg text-sm text-ink-muted">Loading students…</p>}
@@ -298,6 +291,17 @@ export default function ManageClassPage() {
 
           {!isLoading && !loadError && (
             <div className="mt-lg grid grid-cols-1 gap-lg sm:grid-cols-2 lg:grid-cols-3">
+              <button
+                type="button"
+                onClick={() => setModal({ type: 'add' })}
+                className="flex flex-col items-center justify-center gap-md rounded-md border border-dashed border-line bg-surface-subtle/60 p-lg text-center transition-opacity hover:opacity-80"
+              >
+                <span className="text-xl font-semibold text-ink-primary">+</span>
+                <span className="inline-flex min-h-[44px] items-center rounded-sm border border-line bg-surface px-md text-sm font-medium text-ink-primary">
+                  Add Student
+                </span>
+              </button>
+
               {students!.map((student) => (
                 <div key={student.id} className="flex flex-col gap-md rounded-md border border-line bg-surface p-lg shadow-sm">
                   <button

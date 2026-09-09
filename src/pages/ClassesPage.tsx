@@ -72,15 +72,8 @@ export default function ClassesPage() {
 
       <main className="min-h-screen px-lg pb-2xl pt-[104px] lg:px-2xl">
         <div className="mx-auto max-w-5xl">
-          <div className="mb-lg flex items-center justify-between">
+          <div className="mb-lg">
             <h1 className="text-2xl font-semibold text-ink-primary">Classes</h1>
-            <button
-              type="button"
-              onClick={() => setIsAddModalOpen(true)}
-              className="inline-flex min-h-[44px] items-center rounded-sm border border-line bg-surface px-md text-sm font-medium text-ink-primary transition-opacity hover:opacity-80"
-            >
-              + Add Class
-            </button>
           </div>
 
           {isLoading && <p className="text-sm text-ink-muted">Loading classes…</p>}
@@ -88,6 +81,17 @@ export default function ClassesPage() {
 
           {!isLoading && !error && (
             <div className="grid grid-cols-1 gap-lg sm:grid-cols-2 lg:grid-cols-3">
+              <button
+                type="button"
+                onClick={() => setIsAddModalOpen(true)}
+                className="flex flex-col items-center justify-center gap-md rounded-md border border-dashed border-line bg-surface-subtle/60 p-lg text-center transition-opacity hover:opacity-80"
+              >
+                <span className="text-xl font-semibold text-ink-primary">+</span>
+                <span className="inline-flex min-h-[44px] items-center rounded-sm border border-line bg-surface px-md text-sm font-medium text-ink-primary">
+                  Add a Class
+                </span>
+              </button>
+
               {classrooms!.map((classroom) => (
                 <div
                   key={classroom.id}
