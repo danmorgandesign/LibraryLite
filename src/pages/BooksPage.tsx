@@ -45,8 +45,8 @@ function StatusBadge({ status, isRetired }: { status: BookStatus; isRetired: boo
   const isAvailable = status === 'available';
   return (
     <span
-      className={`inline-flex shrink-0 items-center justify-self-start rounded-full border px-md py-xs text-xs font-medium ${
-        isAvailable ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-blue-200 bg-blue-50 text-blue-800'
+      className={`inline-flex shrink-0 items-center justify-self-start rounded-lg border px-md py-xs text-xs font-bold ${
+        isAvailable ? 'border-emerald-600 bg-emerald-50 text-emerald-700' : 'border-blue-600 bg-blue-50 text-blue-800'
       }`}
     >
       {isAvailable ? 'AVAILABLE' : 'ON LOAN'}

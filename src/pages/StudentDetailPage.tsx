@@ -35,8 +35,8 @@ function StatusBadge({ status }: { status: CurrentLoan['status'] }) {
   const isOverdue = status === 'Overdue';
   return (
     <span
-      className={`inline-flex shrink-0 items-center rounded-full border px-md py-xs text-xs font-medium ${
-        isOverdue ? 'border-rose-200 bg-rose-50 text-rose-800' : 'border-blue-200 bg-blue-50 text-blue-800'
+      className={`inline-flex shrink-0 items-center rounded-lg border px-md py-xs text-xs font-bold ${
+        isOverdue ? 'border-rose-600 bg-rose-50 text-rose-800' : 'border-blue-600 bg-blue-50 text-blue-800'
       }`}
     >
       {isOverdue ? 'OVERDUE' : status}

@@ -259,8 +259,8 @@ export default function StudentsPage() {
                   <p className="text-sm text-ink-muted">{student.classroomLabel}</p>
                   <p className="text-sm text-ink-muted">{student.loanCount}</p>
                   <span
-                    className={`inline-flex h-3 w-3 shrink-0 rounded-full ${
-                      student.hasOverdue ? 'bg-rose-600' : 'bg-emerald-600'
+                    className={`inline-flex h-[27px] w-11 shrink-0 items-center justify-center rounded-lg border ${
+                      student.hasOverdue ? 'border-rose-600 bg-rose-50' : 'border-emerald-600 bg-emerald-50'
                     }`}
                     title={student.hasOverdue ? 'Has overdue loans' : 'No overdue loans'}
                   >

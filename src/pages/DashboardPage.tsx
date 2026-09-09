@@ -120,12 +120,12 @@ export default function DashboardPage() {
                 >
                   <span className="truncate text-sm font-medium text-ink-primary">{student.name}</span>
                   <span
-                    className={`inline-flex w-fit items-center rounded-sm border px-md py-xs text-xs font-medium ${
+                    className={`inline-flex w-fit items-center rounded-lg border px-md py-xs text-xs font-bold ${
                       student.overdueCount > 0
-                        ? 'border-rose-200 bg-rose-50 text-rose-800'
+                        ? 'border-rose-600 bg-rose-50 text-rose-800'
                         : student.loanCount > 0
-                          ? 'border-blue-200 bg-blue-50 text-blue-800'
-                          : 'border-line bg-surface-subtle text-ink-muted'
+                          ? 'border-blue-600 bg-blue-50 text-blue-800'
+                          : 'border-gray-400 bg-surface-subtle text-ink-muted'
                     }`}
                   >
                     {student.overdueCount > 0

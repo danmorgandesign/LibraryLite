@@ -30,8 +30,8 @@ function StatusBadge({ status }: { status: BookStatus }) {
   const isAvailable = status === 'available';
   return (
     <span
-      className={`inline-flex w-fit items-center rounded-full border px-md py-xs text-xs font-medium ${
-        isAvailable ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-blue-200 bg-blue-50 text-blue-800'
+      className={`inline-flex w-fit items-center rounded-lg border px-md py-xs text-xs font-bold ${
+        isAvailable ? 'border-emerald-600 bg-emerald-50 text-emerald-700' : 'border-blue-600 bg-blue-50 text-blue-800'
       }`}
     >
       {isAvailable ? 'AVAILABLE' : 'ON LOAN'}
