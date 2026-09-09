@@ -232,8 +232,6 @@ export default function ManageTeachersPage() {
                   </div>
                 </div>
               ))}
-
-              {teachers!.length === 0 && <p className="text-sm text-ink-muted">No teachers yet.</p>}
             </div>
           )}
         </div>
