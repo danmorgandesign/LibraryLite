@@ -243,7 +243,7 @@ export default function ManageClassPage() {
     <>
       <Header />
 
-      <main className="min-h-screen px-lg pb-2xl lg:px-2xl">
+      <main className="min-h-screen px-lg pb-2xl pt-2xl lg:px-2xl">
         <div className="mx-auto max-w-5xl">
           <button
             type="button"

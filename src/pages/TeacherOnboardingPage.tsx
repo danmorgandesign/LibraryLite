@@ -20,7 +20,7 @@ function WithClass() {
   };
 
   return (
-    <main className="min-h-screen px-lg pb-2xl lg:px-2xl">
+    <main className="min-h-screen px-lg pb-2xl pt-2xl lg:px-2xl">
       <div className="mx-auto max-w-5xl">
         <h1 className="text-[28px] font-bold text-ink-primary">Welcome back, Mrs Jenkins</h1>
         <p className="mt-xs text-base text-ink-muted">You're teaching Squirrels. Add your students to get started.</p>
@@ -83,7 +83,7 @@ function WithoutClass() {
   const [newClassName, setNewClassName] = useState('');
 
   return (
-    <main className="min-h-screen px-lg pb-2xl lg:px-2xl">
+    <main className="min-h-screen px-lg pb-2xl pt-2xl lg:px-2xl">
       <div className="mx-auto max-w-5xl">
         <h1 className="text-[28px] font-bold text-ink-primary">Welcome to Library Lite</h1>
         <p className="mt-xs text-base text-ink-muted">

@@ -171,7 +171,7 @@ export default function AdminOnboardingPage() {
         ]}
       />
 
-      <main className="min-h-screen px-lg pb-2xl lg:px-2xl">
+      <main className="min-h-screen px-lg pb-2xl pt-2xl lg:px-2xl">
         <div className="mx-auto max-w-5xl">
           <h1 className="text-[28px] font-bold text-ink-primary">Welcome to Library Lite</h1>
           <p className="mt-xs text-base text-ink-muted">

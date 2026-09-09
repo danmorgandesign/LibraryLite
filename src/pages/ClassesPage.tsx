@@ -70,7 +70,7 @@ export default function ClassesPage() {
     <>
       <Header />
 
-      <main className="min-h-screen px-lg pb-2xl lg:px-2xl">
+      <main className="min-h-screen px-lg pb-2xl pt-2xl lg:px-2xl">
         <div className="mx-auto max-w-5xl">
           <div className="mb-lg">
             <h1 className="text-2xl font-semibold text-ink-primary">Classes</h1>

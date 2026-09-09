@@ -75,7 +75,7 @@ export default function DashboardPage() {
     <>
       <Header />
 
-      <main className="min-h-screen px-lg pb-2xl lg:px-2xl">
+      <main className="min-h-screen px-lg pb-2xl pt-2xl lg:px-2xl">
         <div className="mx-auto max-w-5xl">
           <div className="grid grid-cols-1 gap-lg sm:grid-cols-2">
             <button

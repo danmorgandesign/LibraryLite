@@ -38,7 +38,7 @@ export default function LandingPage() {
         ]}
       />
 
-      <main className="min-h-screen px-lg pb-2xl lg:px-2xl">
+      <main className="min-h-screen px-lg pb-2xl pt-2xl lg:px-2xl">
         <div className="mx-auto max-w-5xl">
           <section className="flex flex-col items-center gap-lg py-2xl text-center">
             <h1 className="max-w-3xl text-4xl font-bold text-ink-primary sm:text-5xl">
