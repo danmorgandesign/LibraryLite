@@ -31,7 +31,7 @@ function StatusBadge({ status }: { status: BookStatus }) {
   return (
     <span
       className={`inline-flex w-fit items-center rounded-full border px-md py-xs text-xs font-medium ${
-        isAvailable ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-orange-200 bg-orange-50 text-orange-800'
+        isAvailable ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-blue-200 bg-blue-50 text-blue-800'
       }`}
     >
       {isAvailable ? 'AVAILABLE' : 'ON LOAN'}

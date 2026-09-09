@@ -48,10 +48,10 @@ function StatusBadge({ status }: { status: LoanStatus }) {
   return (
     <span
       className={`inline-flex shrink-0 items-center rounded-full border px-md py-xs text-xs font-medium ${
-        isOverdue ? 'border-rose-200 bg-rose-50 text-rose-800' : 'border-orange-200 bg-orange-50 text-orange-800'
+        isOverdue ? 'border-rose-200 bg-rose-50 text-rose-800' : 'border-blue-200 bg-blue-50 text-blue-800'
       }`}
     >
-      {status}
+      {isOverdue ? 'OVERDUE' : status}
     </span>
   );
 }

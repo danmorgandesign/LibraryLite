@@ -119,7 +119,15 @@ export default function DashboardPage() {
                   className="flex flex-col gap-xs rounded-sm border border-line bg-surface p-sm text-left transition-opacity hover:opacity-80"
                 >
                   <span className="truncate text-sm font-medium text-ink-primary">{student.name}</span>
-                  <span className="text-xs text-ink-muted">
+                  <span
+                    className={`inline-flex w-fit items-center rounded-sm border px-md py-xs text-xs font-medium ${
+                      student.overdueCount > 0
+                        ? 'border-rose-200 bg-rose-50 text-rose-800'
+                        : student.loanCount > 0
+                          ? 'border-blue-200 bg-blue-50 text-blue-800'
+                          : 'border-line bg-surface-subtle text-ink-muted'
+                    }`}
+                  >
                     {student.overdueCount > 0
                       ? `${student.overdueCount} overdue`
                       : student.loanCount > 0
