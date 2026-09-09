@@ -178,7 +178,7 @@ export default function BooksPage() {
     <>
       <Header />
 
-      <main className="min-h-screen px-lg pb-2xl pt-[104px] lg:px-2xl">
+      <main className="min-h-screen px-lg pb-2xl lg:px-2xl">
         <div className="mx-auto max-w-5xl">
           <div className="flex flex-wrap items-center justify-between gap-md">
             <div className="inline-flex gap-[3px] rounded-md bg-surface-subtle p-[3px]">

@@ -17,7 +17,7 @@ export default function LoginPage() {
         ]}
       />
 
-      <main className="flex min-h-screen items-center justify-center px-lg pb-2xl pt-[104px]">
+      <main className="flex min-h-screen items-center justify-center px-lg pb-2xl">
         <form
           className="w-full max-w-xl rounded-md border border-line bg-surface p-2xl shadow-sm"
           onSubmit={(e) => {

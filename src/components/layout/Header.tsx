@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import HamburgerMenu from './HamburgerMenu';
 import { ensureTenantSession, getSupabaseClient, getTenantSchoolId } from '../../lib/supabaseClient';
@@ -15,6 +15,7 @@ export default function Header() {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const [schoolName, setSchoolName] = useState<string | null>(null);
+  const headerRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -36,7 +37,7 @@ export default function Header() {
     }`;
 
   return (
-    <header className="fixed inset-x-0 top-0 z-10 border-b border-line bg-surface/95 backdrop-blur">
+    <header ref={headerRef} className="sticky top-0 z-10 border-b border-line bg-surface/95 backdrop-blur">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-md px-lg py-md lg:flex-nowrap lg:justify-between">
         <Link to="/dashboard" className="shrink-0">
           <span className="block font-sans text-2xl font-bold tracking-tight text-ink-primary lg:text-3xl">
@@ -85,7 +86,7 @@ export default function Header() {
         </nav>
       </div>
 
-      <HamburgerMenu isOpen={menuOpen} onClose={() => setMenuOpen(false)} />
+      <HamburgerMenu isOpen={menuOpen} onClose={() => setMenuOpen(false)} anchorRef={headerRef} />
     </header>
   );
 }

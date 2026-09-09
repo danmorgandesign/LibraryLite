@@ -27,7 +27,7 @@ export default function AuthHeader({ navItems }: Props) {
     'inline-flex min-h-[44px] items-center rounded-sm px-sm text-sm font-medium text-ink-muted transition-colors hover:bg-surface-subtle hover:text-ink-primary';
 
   return (
-    <header className="fixed inset-x-0 top-0 z-10 border-b border-line bg-surface/95 backdrop-blur">
+    <header className="sticky top-0 z-10 border-b border-line bg-surface/95 backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-lg py-md">
         <Link to="/" className="text-2xl font-bold tracking-tight text-ink-primary">
           Library Lite

@@ -177,7 +177,7 @@ export default function ManageTeachersPage() {
     <>
       <Header />
 
-      <main className="min-h-screen px-lg pb-2xl pt-[104px] lg:px-2xl">
+      <main className="min-h-screen px-lg pb-2xl lg:px-2xl">
         <div className="mx-auto max-w-5xl">
           <h1 className="text-2xl font-semibold text-ink-primary">Manage Teachers</h1>
           <p className="mt-xs text-sm text-ink-muted">Manage your school's teaching staff.</p>

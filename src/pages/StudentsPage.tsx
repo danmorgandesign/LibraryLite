@@ -155,7 +155,7 @@ export default function StudentsPage() {
     <>
       <Header />
 
-      <main className="min-h-screen px-lg pb-2xl pt-[104px] lg:px-2xl">
+      <main className="min-h-screen px-lg pb-2xl lg:px-2xl">
         <div className="mx-auto max-w-5xl">
           <div>
             <h1 className="text-2xl font-semibold text-ink-primary">Students</h1>
