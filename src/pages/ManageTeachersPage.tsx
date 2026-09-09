@@ -182,15 +182,8 @@ export default function ManageTeachersPage() {
           <h1 className="text-2xl font-semibold text-ink-primary">Manage Teachers</h1>
           <p className="mt-xs text-sm text-ink-muted">Manage your school's teaching staff.</p>
 
-          <div className="mt-xl flex items-center justify-between">
+          <div className="mt-xl">
             <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Teachers</p>
-            <button
-              type="button"
-              onClick={() => setModal({ type: 'add' })}
-              className="inline-flex min-h-[44px] items-center rounded-sm border border-line bg-surface px-md text-sm font-medium text-ink-primary transition-opacity hover:opacity-80"
-            >
-              + Add Teacher
-            </button>
           </div>
 
           {isLoading && <p className="mt-lg text-sm text-ink-muted">Loading teachers…</p>}
@@ -198,6 +191,17 @@ export default function ManageTeachersPage() {
 
           {!isLoading && !loadError && (
             <div className="mt-lg grid grid-cols-1 gap-lg sm:grid-cols-2 lg:grid-cols-3">
+              <button
+                type="button"
+                onClick={() => setModal({ type: 'add' })}
+                className="flex flex-col items-center justify-center gap-md rounded-md border border-dashed border-line bg-surface-subtle/60 p-lg text-center transition-opacity hover:opacity-80"
+              >
+                <span className="text-xl font-semibold text-ink-primary">+</span>
+                <span className="inline-flex min-h-[44px] items-center rounded-sm border border-line bg-surface px-md text-sm font-medium text-ink-primary">
+                  Add Teacher
+                </span>
+              </button>
+
               {teachers!.map((teacher) => (
                 <div key={teacher.id} className="flex flex-col gap-xs rounded-md border border-line bg-surface p-lg shadow-sm">
                   <p className="text-lg font-semibold text-ink-primary">
