@@ -77,7 +77,7 @@ export default function DashboardPage() {
 
       <main className="min-h-screen px-lg pb-2xl pt-[104px] lg:px-2xl">
         <div className="mx-auto max-w-5xl">
-          <div className="grid grid-cols-1 gap-lg sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-lg sm:grid-cols-2">
             <button
               type="button"
               onClick={() => navigate('/classes')}
@@ -93,14 +93,6 @@ export default function DashboardPage() {
             >
               <span className="text-lg font-semibold text-ink-primary">Scan Book</span>
               <span className="text-sm text-ink-muted">Scan a barcode to loan or return a book.</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => navigate('/classes')}
-              className="flex flex-col items-center gap-sm rounded-md border border-line bg-surface p-lg text-center shadow-sm transition-opacity hover:opacity-90"
-            >
-              <span className="text-lg font-semibold text-ink-primary">Manage</span>
-              <span className="text-sm text-ink-muted">Manage classes, students, and rosters.</span>
             </button>
           </div>
 

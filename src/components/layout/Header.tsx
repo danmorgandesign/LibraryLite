@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { Link, NavLink, useNavigate } from 'react-router-dom';
 import HamburgerMenu from './HamburgerMenu';
 import { ensureTenantSession, getSupabaseClient, getTenantSchoolId } from '../../lib/supabaseClient';
 
@@ -12,7 +12,6 @@ async function fetchSchoolName(): Promise<string | null> {
 }
 
 export default function Header() {
-  const location = useLocation();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const [schoolName, setSchoolName] = useState<string | null>(null);
@@ -30,9 +29,6 @@ export default function Header() {
       cancelled = true;
     };
   }, []);
-  // The dashboard has its own "Scan Book" action card, so the header pill
-  // would just duplicate it there.
-  const hasOwnScanCta = location.pathname === '/dashboard';
 
   const navLinkClassName = ({ isActive }: { isActive: boolean }) =>
     `inline-flex min-h-[44px] items-center rounded-sm px-sm text-sm font-medium transition-colors hover:bg-surface-subtle hover:text-ink-primary ${
@@ -71,14 +67,12 @@ export default function Header() {
           <NavLink to="/dashboard" className={navLinkClassName}>
             Dashboard
           </NavLink>
-          {!hasOwnScanCta && (
-            <Link
-              to="/scan"
-              className="inline-flex min-h-[44px] items-center rounded-full bg-accent px-lg text-sm font-medium text-ink-primary transition-opacity hover:opacity-90"
-            >
-              Scan a Book
-            </Link>
-          )}
+          <Link
+            to="/scan"
+            className="inline-flex min-h-[44px] items-center rounded-full bg-accent px-lg text-sm font-medium text-ink-primary transition-opacity hover:opacity-90"
+          >
+            Scan a Book
+          </Link>
           <button
             type="button"
             onClick={() => setMenuOpen(true)}
