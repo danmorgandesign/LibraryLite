@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import Header from '../components/layout/Header';
 import BookDetailModal from '../components/BookDetailModal';
 import { getSupabaseClient } from '../lib/supabaseClient';
@@ -121,6 +121,7 @@ async function unretireBook(bookId: string): Promise<void> {
 
 export default function BooksPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const goToStudent = (student: Student) => navigate(`/students/${student.id}`);
   const [books, setBooks] = useState<Book[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -142,6 +143,20 @@ export default function BooksPage() {
       cancelled = true;
     };
   }, []);
+
+  // Opens the modal for a book handed off via router state — e.g. the nav
+  // search dropdown navigates here with { selectedBookId } after a click.
+  // Guarded to run once: `books` gets a new array reference on every
+  // retire/unretire, which would otherwise re-open the modal on each edit.
+  const appliedInitialSelection = useRef(false);
+  useEffect(() => {
+    if (appliedInitialSelection.current || !books) return;
+    appliedInitialSelection.current = true;
+    const selectedId = (location.state as { selectedBookId?: string } | null)?.selectedBookId;
+    if (!selectedId) return;
+    const found = books.find((b) => b.id === selectedId);
+    if (found) setSelectedBook(found);
+  }, [books, location.state]);
 
   const isLoading = books === null && !error;
 
