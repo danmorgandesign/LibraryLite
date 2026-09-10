@@ -204,7 +204,7 @@ export default function ProfilePage() {
           <h1 className="text-2xl font-semibold text-ink-primary">My Profile</h1>
           <p className="mt-xs text-sm text-ink-muted">View and update your account details.</p>
 
-          <div className="mt-lg grid grid-cols-1 gap-lg lg:grid-cols-[1fr_320px]">
+          <div className="mt-lg grid grid-cols-1 gap-lg lg:grid-cols-[1fr_400px]">
             <div className="rounded-md border border-line bg-surface px-lg">
               <div className="flex items-center justify-between gap-md border-b border-line py-lg">
                 <div>
