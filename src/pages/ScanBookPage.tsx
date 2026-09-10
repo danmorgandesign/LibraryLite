@@ -60,6 +60,14 @@ function toHttps(url: string | undefined): string | null {
   return url ? url.replace(/^http:\/\//, 'https://') : null;
 }
 
+// Books with no usable printed barcode (locally made readers, a damaged or
+// missing label, etc) still need a value for the books table's NOT NULL
+// UNIQUE barcode column — generate one so "skip scanning" can go straight to
+// manual entry without a real barcode to attach to.
+function generateManualBarcode(): string {
+  return `manual-${crypto.randomUUID()}`;
+}
+
 function extractIsbn(identifiers: Array<{ type: string; identifier: string }> | undefined): string | null {
   return (
     identifiers?.find((i) => i.type === 'ISBN_13')?.identifier ??
@@ -717,9 +725,20 @@ export default function ScanBookPage() {
         )}
 
         {scanResult.status === 'scanning' && (
-          <p className="w-[328px] max-w-full text-center text-base text-ink-muted">
-            Point the tablet&rsquo;s camera at a book&rsquo;s barcode to scan it.
-          </p>
+          <div className="flex flex-col items-center gap-md">
+            <p className="w-[328px] max-w-full text-center text-base text-ink-muted">
+              Point the tablet&rsquo;s camera at a book&rsquo;s barcode to scan it.
+            </p>
+            <button
+              type="button"
+              onClick={() =>
+                setScanResult({ status: 'entering-book-details', barcode: generateManualBarcode() })
+              }
+              className="text-sm font-medium text-ink-muted underline"
+            >
+              Skip — Enter Book Details Manually
+            </button>
+          </div>
         )}
       </div>
     </div>
