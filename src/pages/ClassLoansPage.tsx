@@ -105,7 +105,6 @@ export default function ClassLoansPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const goToStudent = (student: Student) => navigate(`/students/${student.id}`);
-  const goBack = () => navigate('/classes');
 
   const [classroomLabel, setClassroomLabel] = useState<string | null>(
     (location.state as { classroomLabel?: string } | null)?.classroomLabel ?? null,
@@ -203,15 +202,7 @@ export default function ClassLoansPage() {
 
       <main className="min-h-screen px-lg pb-2xl pt-2xl lg:px-2xl">
         <div className="mx-auto max-w-5xl">
-          <button
-            type="button"
-            onClick={goBack}
-            className="text-sm font-medium text-ink-muted transition-colors hover:text-ink-primary"
-          >
-            ← Back to Classes
-          </button>
-
-          <div className="mt-lg flex items-start justify-between">
+          <div className="flex items-start justify-between">
             <div>
               <h1 className="text-2xl font-semibold text-ink-primary">Class Loans</h1>
               <p className="mt-xs text-sm text-ink-muted">
