@@ -7,7 +7,9 @@ type Props = {
   onClose: () => void;
   // Positioned off the real header element rather than a hardcoded offset,
   // since the header's height isn't fixed — it wraps onto extra lines on
-  // narrow/portrait viewports.
+  // narrow/portrait viewports. Anchoring to the header as a whole (rather
+  // than the button specifically) keeps the panel clear of all wrapped
+  // content regardless of where the button ends up sitting.
   anchorRef: RefObject<HTMLElement | null>;
 };
 
@@ -20,12 +22,9 @@ const ITEMS = [
   { label: 'Students', to: '/students' },
 ];
 
-// Slide-in drawer matching the Figma "NAV-01 Hamburger Menu" reference
-// (white card, border + shadow, rounded corners, horizontal dividers
-// between rows). The prototype's own transition direction (slide up from
-// the bottom) reads as a mismatched choice from the prototyping tool rather
-// than a deliberate final decision — a right-edge slide is the standard,
-// sensible implementation of a hamburger drawer, so that's what this does.
+// Panel fades in at its final position (no slide) — the hamburger button
+// itself toggles to an "X" in Header.tsx, in the exact same spot, so there's
+// no separate close button inside the panel.
 //
 // Rendered via a portal straight into <body>, rather than nested inside
 // <Header>: the header has `backdrop-blur` (a CSS backdrop-filter), and a
@@ -40,7 +39,7 @@ export default function HamburgerMenu({ isOpen, onClose, anchorRef }: Props) {
   useEffect(() => {
     function measure() {
       const rect = anchorRef.current?.getBoundingClientRect();
-      if (rect) setPanelPos({ top: rect.bottom, right: window.innerWidth - rect.right });
+      if (rect) setPanelPos({ top: rect.bottom + 8, right: window.innerWidth - rect.right + 20 });
     }
     if (isOpen) {
       measure();
@@ -62,21 +61,11 @@ export default function HamburgerMenu({ isOpen, onClose, anchorRef }: Props) {
         role="dialog"
         aria-modal="true"
         aria-label="Menu"
-        style={panelPos ? { top: panelPos.top, right: panelPos.right + 20 } : undefined}
-        className={`fixed z-30 w-[252px] rounded-md border border-line bg-surface shadow-lg transition-transform ${
-          isOpen ? 'translate-x-0' : 'pointer-events-none translate-x-[calc(100%+24px)]'
+        style={panelPos ? { top: panelPos.top, right: panelPos.right } : undefined}
+        className={`fixed z-30 w-[252px] rounded-md border border-line bg-surface shadow-lg transition-opacity ${
+          isOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
         }`}
       >
-        <div className="flex items-center justify-end border-b border-line px-md py-sm">
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close menu"
-            className="inline-flex min-h-[44px] min-w-[34px] items-center justify-center rounded-sm text-lg font-medium text-ink-primary hover:bg-surface-subtle"
-          >
-            ✕
-          </button>
-        </div>
         <nav aria-label="Menu" className="flex flex-col">
           {ITEMS.map((item, i) => (
             <NavLink

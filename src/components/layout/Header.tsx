@@ -39,7 +39,17 @@ export default function Header() {
     }`;
 
   return (
-    <header ref={headerRef} className="sticky top-0 z-10 border-b border-line bg-surface/95 backdrop-blur">
+    <header
+      ref={headerRef}
+      // Bumped above the hamburger menu's own dimming backdrop (z-20) only
+      // while it's open — otherwise the backdrop (which covers the full
+      // viewport) sits above the header and blocks clicks on the toggle
+      // button, which doubles as the menu's close button. Stays at the
+      // normal z-10 the rest of the time so it doesn't also float above
+      // unrelated full-screen modals elsewhere in the app (e.g. Manage
+      // Teachers' Add/Edit overlays, also z-20).
+      className={`sticky top-0 border-b border-line bg-surface/95 backdrop-blur ${menuOpen ? 'z-30' : 'z-10'}`}
+    >
       <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-md px-lg py-md lg:flex-nowrap lg:justify-between">
         <Link to="/dashboard" className="shrink-0">
           <span className="block font-sans text-2xl font-bold tracking-tight text-ink-primary lg:text-3xl">
@@ -82,12 +92,12 @@ export default function Header() {
           </Link>
           <button
             type="button"
-            onClick={() => setMenuOpen(true)}
-            aria-label="Open menu"
+            onClick={() => setMenuOpen((v) => !v)}
+            aria-label={menuOpen ? 'Close menu' : 'Open menu'}
             aria-expanded={menuOpen}
             className="inline-flex min-h-[44px] min-w-[38px] items-center justify-center rounded-sm text-lg text-ink-primary hover:bg-surface-subtle"
           >
-            ☰
+            {menuOpen ? '✕' : '☰'}
           </button>
         </nav>
       </div>
