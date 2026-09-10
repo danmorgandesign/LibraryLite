@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/layout/Header';
 import { getSupabaseClient } from '../lib/supabaseClient';
+import { useAuth } from '../lib/auth';
 
 type StudentSummary = {
   id: string;
@@ -19,13 +20,22 @@ function formatName(first: string, lastInitial: string | null) {
   return lastInitial ? `${first} ${lastInitial}.` : first;
 }
 
-async function fetchRoster(): Promise<StudentSummary[]> {
+async function fetchRoster(classroomId: string | null): Promise<StudentSummary[]> {
   const supabase = getSupabaseClient();
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('students')
     .select('id, first_name, last_initial, loans(returned_at, loaned_at)')
     .order('first_name');
+
+  // A teacher with their own class only sees that class's roster here — an
+  // admin with no classroom_id (not every admin teaches a class) still sees
+  // the whole school, matching the dashboard's previous behavior for them.
+  if (classroomId) {
+    query = query.eq('classroom_id', classroomId);
+  }
+
+  const { data, error } = await query;
 
   if (error) throw error;
 
@@ -49,16 +59,33 @@ async function fetchRoster(): Promise<StudentSummary[]> {
   });
 }
 
+async function fetchClassLabel(classroomId: string): Promise<string | null> {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from('classrooms')
+    .select('class_label')
+    .eq('id', classroomId)
+    .maybeSingle();
+  if (error) throw error;
+  return data?.class_label ?? null;
+}
+
 export default function DashboardPage() {
   const navigate = useNavigate();
+  const { teacher } = useAuth();
+  const classroomId = teacher?.classroom_id ?? null;
+
   const [roster, setRoster] = useState<StudentSummary[] | null>(null);
+  const [classLabel, setClassLabel] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    fetchRoster()
-      .then((data) => {
-        if (!cancelled) setRoster(data);
+    Promise.all([fetchRoster(classroomId), classroomId ? fetchClassLabel(classroomId) : Promise.resolve(null)])
+      .then(([rosterData, label]) => {
+        if (cancelled) return;
+        setRoster(rosterData);
+        setClassLabel(label);
       })
       .catch((err) => {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Could not load the class roster.');
@@ -66,9 +93,10 @@ export default function DashboardPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [classroomId]);
 
   const isLoading = roster === null && !error;
+  const rosterHeading = classLabel ? `${classLabel} Class Roster` : 'Class Roster';
 
   return (
     <>
@@ -95,7 +123,7 @@ export default function DashboardPage() {
             </button>
           </div>
 
-          <p className="mt-xl text-xs font-semibold uppercase tracking-wide text-ink-muted">Class Roster</p>
+          <p className="mt-xl text-xs font-semibold uppercase tracking-wide text-ink-muted">{rosterHeading}</p>
 
           {isLoading && <p className="mt-sm text-sm text-ink-muted">Loading roster…</p>}
           {error && <p className="mt-sm text-sm text-red-600">{error}</p>}
