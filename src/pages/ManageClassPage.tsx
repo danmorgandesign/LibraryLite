@@ -332,8 +332,6 @@ export default function ManageClassPage() {
                   </div>
                 </div>
               ))}
-
-              {students!.length === 0 && <p className="text-sm text-ink-muted">No students in this class yet.</p>}
             </div>
           )}
         </div>
