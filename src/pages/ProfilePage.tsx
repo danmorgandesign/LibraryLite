@@ -12,25 +12,36 @@ async function fetchClassrooms(): Promise<Classroom[]> {
   return data;
 }
 
-// Editing here is still local-only — Save updates this page's own state,
-// not the teachers row — matching the rest of the prototype's edit UI
-// until real profile persistence is built.
+type SelectOption = { value: string; label: string };
+
+// Name and Email are still local-only here — onSave just updates this
+// page's own state, not the teachers row — matching the rest of the
+// prototype's edit UI until real persistence is built for them too. Class
+// is wired for real: its onSave writes to the teachers row (see
+// saveClassroom below) and refreshes the shared auth context.
 function ProfileField({
   label,
-  value,
-  onChange,
+  displayValue,
+  editValue,
+  onSave,
   options,
 }: {
   label: string;
-  value: string;
-  onChange: (next: string) => void;
+  // What's shown when not editing.
+  displayValue: string;
+  // What seeds the editor when Edit is clicked — for a select this is the
+  // option's value (e.g. a classroom id), not its display label.
+  editValue: string;
+  onSave: (next: string) => void | Promise<void>;
   // When set, edit mode shows a dropdown constrained to these values instead
   // of a free-text input — for fields like Class where the value has to be
   // one of a known, finite set rather than whatever the teacher types.
-  options?: string[];
+  options?: SelectOption[];
 }) {
   const [isEditing, setIsEditing] = useState(false);
-  const [draft, setDraft] = useState(value);
+  const [draft, setDraft] = useState(editValue);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   return (
     <div className="flex items-center justify-between gap-md border-b border-line py-lg last:border-b-0">
@@ -51,8 +62,8 @@ function ProfileField({
                 className="w-full appearance-none rounded-sm border border-line bg-surface-subtle py-xs pl-md pr-2xl text-base font-semibold text-ink-primary focus:outline-none focus:ring-2 focus:ring-ink-primary/20"
               >
                 {options.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
+                  <option key={option.value} value={option.value}>
+                    {option.label}
                   </option>
                 ))}
               </select>
@@ -80,31 +91,59 @@ function ProfileField({
             />
           )
         ) : (
-          <p className="mt-xs text-base font-semibold text-ink-primary">{value}</p>
+          <p className="mt-xs text-base font-semibold text-ink-primary">{displayValue}</p>
         )}
+        {saveError && <p className="mt-xs text-sm text-red-600">{saveError}</p>}
       </div>
       <button
         type="button"
-        onClick={() => {
-          if (isEditing) {
-            onChange(draft);
-          } else {
-            setDraft(value);
+        disabled={isSaving}
+        onClick={async () => {
+          if (!isEditing) {
+            setDraft(editValue);
+            setSaveError(null);
+            setIsEditing(true);
+            return;
           }
-          setIsEditing((v) => !v);
+          setIsSaving(true);
+          setSaveError(null);
+          try {
+            await onSave(draft);
+            setIsEditing(false);
+          } catch (err) {
+            setSaveError(err instanceof Error ? err.message : 'Could not save — try again.');
+          } finally {
+            setIsSaving(false);
+          }
         }}
-        className="shrink-0 inline-flex min-h-[44px] items-center rounded-sm border border-line bg-white px-md text-sm font-medium text-ink-primary transition-opacity hover:opacity-80"
+        className="shrink-0 inline-flex min-h-[44px] items-center rounded-sm border border-line bg-white px-md text-sm font-medium text-ink-primary transition-opacity hover:opacity-80 disabled:opacity-60"
       >
-        {isEditing ? 'Save' : 'Edit'}
+        {isSaving ? 'Saving…' : isEditing ? 'Save' : 'Edit'}
       </button>
     </div>
   );
 }
 
+const NO_CLASS_VALUE = '';
+
+// Writes straight to the teachers row and refreshes the shared auth
+// context, the same self-assign pattern TeacherOnboardingPage's "claim a
+// class" step already uses (teachers can update their own row — RLS scopes
+// updates to same-school rows, not "own row only" — so this isn't a new
+// permission, just the same capability surfaced here too).
+async function saveClassroom(teacherId: string, nextClassroomId: string): Promise<void> {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase
+    .from('teachers')
+    .update({ classroom_id: nextClassroomId || null })
+    .eq('id', teacherId);
+  if (error) throw error;
+}
+
 export default function ProfilePage() {
   // RequireAuth guarantees a signed-in user with a linked teachers row by
   // the time this page renders.
-  const { user, teacher } = useAuth();
+  const { user, teacher, refreshTeacher } = useAuth();
 
   const [classrooms, setClassrooms] = useState<Classroom[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -124,19 +163,13 @@ export default function ProfilePage() {
   }, []);
 
   const ownClassLabel = classrooms?.find((c) => c.id === teacher?.classroom_id)?.class_label ?? 'Not teaching a class';
-  const classOptions = ['Not teaching a class', ...(classrooms?.map((c) => c.class_label) ?? [])];
+  const classOptions: SelectOption[] = [
+    { value: NO_CLASS_VALUE, label: 'Not teaching a class' },
+    ...(classrooms?.map((c) => ({ value: c.id, label: c.class_label })) ?? []),
+  ];
 
   const [name, setName] = useState(teacher?.name ?? '');
-  const [className, setClassName] = useState(ownClassLabel);
   const [email, setEmail] = useState(user?.email ?? '');
-
-  // classrooms loads asynchronously after mount, so the seeded className
-  // above is often still the "Not teaching a class" fallback at first
-  // render — sync it once the real label is known.
-  useEffect(() => {
-    setClassName(ownClassLabel);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [classrooms]);
 
   return (
     <>
@@ -167,9 +200,19 @@ export default function ProfilePage() {
                 </button>
               </div>
 
-              <ProfileField label="Name" value={name} onChange={setName} />
-              <ProfileField label="Class" value={className} onChange={setClassName} options={classOptions} />
-              <ProfileField label="Email" value={email} onChange={setEmail} />
+              <ProfileField label="Name" displayValue={name} editValue={name} onSave={setName} />
+              <ProfileField
+                label="Class"
+                displayValue={ownClassLabel}
+                editValue={teacher?.classroom_id ?? NO_CLASS_VALUE}
+                options={classOptions}
+                onSave={async (nextClassroomId) => {
+                  if (!teacher) return;
+                  await saveClassroom(teacher.id, nextClassroomId);
+                  await refreshTeacher();
+                }}
+              />
+              <ProfileField label="Email" displayValue={email} editValue={email} onSave={setEmail} />
             </div>
 
             <div className="rounded-md border border-line bg-surface p-lg">
