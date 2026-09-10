@@ -92,7 +92,7 @@ function ModalShell({ children }: { children: React.ReactNode }) {
 }
 
 export default function ManageTeachersPage() {
-  const { teacher: currentTeacher } = useAuth();
+  const { teacher: currentTeacher, refreshTeacher } = useAuth();
   const [teachers, setTeachers] = useState<Teacher[] | null>(null);
   const [classrooms, setClassrooms] = useState<Classroom[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -152,6 +152,10 @@ export default function ManageTeachersPage() {
     try {
       const updated = await updateTeacher(modal.teacher.id, nameInput.trim(), classroomIdInput || null);
       setTeachers((prev) => (prev ?? []).map((t) => (t.id === updated.id ? updated : t)));
+      // Editing your own row here (rather than via Profile) left the shared
+      // auth context's cached teacher.classroom_id stale — e.g. Dashboard's
+      // "<class> Loans" card kept showing the old class until next login.
+      if (currentTeacher && updated.id === currentTeacher.id) await refreshTeacher();
       closeModal();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Could not update teacher.');
