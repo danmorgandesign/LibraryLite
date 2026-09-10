@@ -19,10 +19,15 @@ function ProfileField({
   label,
   value,
   onChange,
+  options,
 }: {
   label: string;
   value: string;
   onChange: (next: string) => void;
+  // When set, edit mode shows a dropdown constrained to these values instead
+  // of a free-text input — for fields like Class where the value has to be
+  // one of a known, finite set rather than whatever the teacher types.
+  options?: string[];
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState(value);
@@ -32,12 +37,27 @@ function ProfileField({
       <div className="min-w-0 flex-1">
         <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">{label}</p>
         {isEditing ? (
-          <input
-            autoFocus
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            className="mt-xs w-full rounded-sm border border-line bg-surface-subtle px-md py-xs text-base font-semibold text-ink-primary focus:outline-none focus:ring-2 focus:ring-ink-primary/20"
-          />
+          options ? (
+            <select
+              autoFocus
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              className="mt-xs w-full rounded-sm border border-line bg-surface-subtle px-md py-xs text-base font-semibold text-ink-primary focus:outline-none focus:ring-2 focus:ring-ink-primary/20"
+            >
+              {options.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              autoFocus
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              className="mt-xs w-full rounded-sm border border-line bg-surface-subtle px-md py-xs text-base font-semibold text-ink-primary focus:outline-none focus:ring-2 focus:ring-ink-primary/20"
+            />
+          )
         ) : (
           <p className="mt-xs text-base font-semibold text-ink-primary">{value}</p>
         )}
@@ -83,6 +103,7 @@ export default function ProfilePage() {
   }, []);
 
   const ownClassLabel = classrooms?.find((c) => c.id === teacher?.classroom_id)?.class_label ?? 'Not teaching a class';
+  const classOptions = ['Not teaching a class', ...(classrooms?.map((c) => c.class_label) ?? [])];
 
   const [name, setName] = useState(teacher?.name ?? '');
   const [className, setClassName] = useState(ownClassLabel);
@@ -126,7 +147,7 @@ export default function ProfilePage() {
               </div>
 
               <ProfileField label="Name" value={name} onChange={setName} />
-              <ProfileField label="Class" value={className} onChange={setClassName} />
+              <ProfileField label="Class" value={className} onChange={setClassName} options={classOptions} />
               <ProfileField label="Email" value={email} onChange={setEmail} />
             </div>
 
