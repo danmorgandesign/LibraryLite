@@ -16,7 +16,13 @@ export default function Header() {
   const { teacher } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [schoolName, setSchoolName] = useState<string | null>(null);
-  const headerRef = useRef<HTMLElement>(null);
+  // Anchored to the centered content wrapper, not the full-bleed <header>
+  // itself — the header has no max-width, so its own rect.right is the
+  // viewport edge, which on desktop is well past the visible content's
+  // right edge (the wrapper below is centered via mx-auto max-w-6xl). This
+  // div still wraps onto extra rows on narrow viewports same as before, so
+  // its rect still grows to clear all wrapped content.
+  const contentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!teacher) return;
@@ -40,7 +46,6 @@ export default function Header() {
 
   return (
     <header
-      ref={headerRef}
       // Bumped above the hamburger menu's own dimming backdrop (z-20) only
       // while it's open — otherwise the backdrop (which covers the full
       // viewport) sits above the header and blocks clicks on the toggle
@@ -50,7 +55,10 @@ export default function Header() {
       // Teachers' Add/Edit overlays, also z-20).
       className={`sticky top-0 border-b border-line bg-surface/95 backdrop-blur ${menuOpen ? 'z-30' : 'z-10'}`}
     >
-      <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-md px-lg py-md lg:flex-nowrap lg:justify-between">
+      <div
+        ref={contentRef}
+        className="mx-auto flex max-w-6xl flex-wrap items-center gap-md px-lg py-md lg:flex-nowrap lg:justify-between"
+      >
         <Link to="/dashboard" className="shrink-0">
           <span className="block font-sans text-2xl font-bold tracking-tight text-ink-primary lg:text-3xl">
             Library Lite
@@ -102,7 +110,7 @@ export default function Header() {
         </nav>
       </div>
 
-      <HamburgerMenu isOpen={menuOpen} onClose={() => setMenuOpen(false)} anchorRef={headerRef} />
+      <HamburgerMenu isOpen={menuOpen} onClose={() => setMenuOpen(false)} anchorRef={contentRef} />
     </header>
   );
 }
