@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import Header from '../components/layout/Header';
 import { getSupabaseClient } from '../lib/supabaseClient';
+import { useAuth } from '../lib/auth';
 
 type Student = { id: string; first_name: string; last_initial: string | null };
 type StudentRow = Student & {
@@ -82,6 +83,7 @@ function isSortKey(value: string | null): value is SortKey {
 export default function StudentsPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { teacher } = useAuth();
   // Filters live in the URL (not just component state) so that clicking
   // "Details" and then "Back to Students" — or a plain refresh — lands back
   // on the same filtered/sorted view instead of resetting it. Also how a
@@ -93,9 +95,16 @@ export default function StudentsPage() {
   const [classrooms, setClassrooms] = useState<Classroom[] | null>(null);
   const [students, setStudents] = useState<StudentRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [activeClassroomIds, setActiveClassroomIds] = useState<Set<string>>(
-    () => new Set(searchParams.getAll('class')),
-  );
+  const [activeClassroomIds, setActiveClassroomIds] = useState<Set<string>>(() => {
+    const fromUrl = searchParams.getAll('class');
+    if (fromUrl.length > 0) return new Set(fromUrl);
+    // No explicit filter in the URL — a teacher assigned to a class lands
+    // straight on their own class's roster instead of the full school list.
+    // Admins (and teachers with no class) see everyone, same as before.
+    // One-time default only: once the URL syncs below, clearing this filter
+    // won't re-apply it.
+    return teacher?.classroom_id ? new Set([teacher.classroom_id]) : new Set();
+  });
   const [sortBy, setSortBy] = useState<SortKey>(() => {
     const fromUrl = searchParams.get('sort');
     return isSortKey(fromUrl) ? fromUrl : 'alphabet';
@@ -251,11 +260,11 @@ export default function StudentsPage() {
           )}
 
           <div className="mt-lg">
-            <div className="hidden grid-cols-[1fr_1fr_120px_80px_90px] gap-lg border-b border-line pb-sm text-xs font-semibold uppercase tracking-wide text-ink-muted sm:grid">
+            <div className="hidden grid-cols-[80px_1fr_1fr_120px_90px] gap-lg border-b border-line pb-sm text-xs font-semibold uppercase tracking-wide text-ink-muted sm:grid">
+              <span>Status</span>
               <span>Name</span>
               <span>Class</span>
               <span>Books on Loan</span>
-              <span>Status</span>
               <span aria-hidden="true" />
             </div>
 
@@ -267,8 +276,16 @@ export default function StudentsPage() {
               visibleStudents.map((student) => (
                 <div
                   key={student.id}
-                  className="grid grid-cols-1 items-center gap-xs border-b border-line py-sm sm:grid-cols-[1fr_1fr_120px_80px_90px] sm:gap-lg"
+                  className="grid grid-cols-1 items-center gap-xs border-b border-line py-sm sm:grid-cols-[80px_1fr_1fr_120px_90px] sm:gap-lg"
                 >
+                  <span
+                    className={`inline-flex h-[27px] w-11 shrink-0 items-center justify-center rounded-lg border ${
+                      student.hasOverdue ? 'border-rose-600 bg-rose-50' : 'border-emerald-600 bg-emerald-50'
+                    }`}
+                    title={student.hasOverdue ? 'Has overdue loans' : 'No overdue loans'}
+                  >
+                    <span className="sr-only">{student.hasOverdue ? 'Has overdue loans' : 'No overdue loans'}</span>
+                  </span>
                   <button
                     type="button"
                     onClick={() => goToStudent(student)}
@@ -278,14 +295,6 @@ export default function StudentsPage() {
                   </button>
                   <p className="text-sm text-ink-muted">{student.classroomLabel}</p>
                   <p className="text-sm text-ink-muted">{student.loanCount}</p>
-                  <span
-                    className={`inline-flex h-[27px] w-11 shrink-0 items-center justify-center rounded-lg border ${
-                      student.hasOverdue ? 'border-rose-600 bg-rose-50' : 'border-emerald-600 bg-emerald-50'
-                    }`}
-                    title={student.hasOverdue ? 'Has overdue loans' : 'No overdue loans'}
-                  >
-                    <span className="sr-only">{student.hasOverdue ? 'Has overdue loans' : 'No overdue loans'}</span>
-                  </span>
                   <button
                     type="button"
                     onClick={() => goToStudent(student)}
