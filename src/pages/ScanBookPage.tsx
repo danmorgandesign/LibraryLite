@@ -68,6 +68,40 @@ function extractIsbn(identifiers: Array<{ type: string; identifier: string }> | 
   );
 }
 
+// Open Library's MARC-derived titles sometimes carry the publisher's imprint
+// name stuck on the front (e.g. "WALKER The Diamond Brothers In..." for a
+// book published by Walker) — a cataloguing artifact, not part of the real
+// title. Strip it when the title actually starts with the publisher name.
+function stripPublisherPrefix(title: string, publisher: string | null): string {
+  if (!publisher) return title;
+  const prefix = publisher.trim();
+  if (prefix && title.toLowerCase().startsWith(`${prefix.toLowerCase()} `)) {
+    return title.slice(prefix.length).trim();
+  }
+  return title;
+}
+
+type BookLookupResult = { title: string | null; author: string | null; coverUrl: string | null };
+
+// Google Books and Open Library sometimes each have a record for the same
+// ISBN that disagree — one has a thin/marketing alt-title with no author,
+// the other a fuller but scruffier catalogue title. Stitching title from one
+// and author from the other (the old approach) risks pairing a title with
+// an unrelated author. Instead, prefer whichever source's title+author
+// actually go together as a complete record, and only fall back to mixing
+// fields when neither source is complete on its own.
+function pickBestBookData(google: BookLookupResult, openLibrary: BookLookupResult): BookLookupResult {
+  const googleComplete = google.title && google.author;
+  const openLibraryComplete = openLibrary.title && openLibrary.author;
+  const primary = googleComplete ? google : openLibraryComplete ? openLibrary : null;
+
+  return {
+    title: primary?.title ?? google.title ?? openLibrary.title,
+    author: primary?.author ?? google.author ?? openLibrary.author,
+    coverUrl: google.coverUrl ?? openLibrary.coverUrl,
+  };
+}
+
 async function lookupGoogleBooksByIsbn(barcode: string): Promise<{ title: string | null; author: string | null; coverUrl: string | null }> {
   try {
     const params = new URLSearchParams({ q: `isbn:${barcode}`, key: GOOGLE_BOOKS_API_KEY });
@@ -99,8 +133,9 @@ async function lookupOpenLibraryByIsbn(barcode: string): Promise<{ title: string
     const data = await res.json();
     const info = data[`ISBN:${barcode}`];
     if (!info) return { title: null, author: null, coverUrl: null };
+    const publisher: string | null = info.publishers?.[0]?.name ?? null;
     return {
-      title: info.title ?? null,
+      title: info.title ? stripPublisherPrefix(info.title, publisher) : null,
       author: info.authors?.[0]?.name ?? null,
       coverUrl: toHttps(info.cover?.medium ?? info.cover?.small),
     };
@@ -111,19 +146,14 @@ async function lookupOpenLibraryByIsbn(barcode: string): Promise<{ title: string
 
 // Used to preview a book's details when it isn't in our own catalogue yet
 // (so "Add to catalogue" has something real to show, not just the raw
-// barcode). Queries Google Books and Open Library in parallel and merges
-// them — each fills gaps the other misses, which matters a lot more than
-// the extra request given how often a single source comes back empty.
+// barcode). Queries Google Books and Open Library in parallel — see
+// pickBestBookData for how the two records get reconciled.
 async function lookupExternalBookData(barcode: string): Promise<{ title: string | null; author: string | null; coverUrl: string | null }> {
   const [google, openLibrary] = await Promise.all([
     lookupGoogleBooksByIsbn(barcode),
     lookupOpenLibraryByIsbn(barcode),
   ]);
-  return {
-    title: google.title ?? openLibrary.title,
-    author: google.author ?? openLibrary.author,
-    coverUrl: google.coverUrl ?? openLibrary.coverUrl,
-  };
+  return pickBestBookData(google, openLibrary);
 }
 
 async function lookupGoogleBooksByTitleAndAuthor(title: string, author: string): Promise<{ isbn: string | null; coverUrl: string | null }> {
