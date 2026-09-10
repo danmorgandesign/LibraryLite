@@ -107,11 +107,15 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 gap-lg sm:grid-cols-2">
             <button
               type="button"
-              onClick={() => navigate('/classes')}
+              onClick={() => navigate(classroomId ? `/classes/${classroomId}/loans` : '/classes')}
               className="flex flex-col items-center gap-sm rounded-md border border-line bg-surface p-lg text-center shadow-sm transition-opacity hover:opacity-90"
             >
-              <span className="text-lg font-semibold text-ink-primary">View Class</span>
-              <span className="text-sm text-ink-muted">See class rosters and loan activity.</span>
+              <span className="text-lg font-semibold text-ink-primary">
+                {classLabel ? `${classLabel} Loans` : 'View Class'}
+              </span>
+              <span className="text-sm text-ink-muted">
+                {classroomId ? 'See your class roster and loan activity.' : 'See class rosters and loan activity.'}
+              </span>
             </button>
             <button
               type="button"
