@@ -13,7 +13,6 @@ type Props = {
 };
 
 export default function NotInCataloguePage({
-  barcode,
   title: lookedUpTitle,
   author: lookedUpAuthor,
   coverUrl,
@@ -23,12 +22,15 @@ export default function NotInCataloguePage({
   onAddAndScanAnother,
   onCancel,
 }: Props) {
-  // Editable, not just displayed — Google Books / Open Library sometimes
-  // return a wrong or boxset/marketing title for a given ISBN, and there's
-  // no reliable way to detect that automatically (the source catalogue
-  // itself is wrong, not our parsing of it). The only ground truth is the
-  // copy in the librarian's hand, so let them fix it here before it gets
-  // saved into the catalogue rather than locking in bad external data.
+  // The lookup is right the overwhelming majority of the time, so the
+  // default view just displays it — editing is opt-in via the link below,
+  // not shown up front. Google Books / Open Library occasionally return a
+  // wrong or boxset/marketing title for a given ISBN with no reliable way to
+  // detect that automatically (the source catalogue itself is wrong, not
+  // our parsing of it), so when that happens the only ground truth is the
+  // copy in the librarian's hand — the edit link lets them fix it before
+  // it's saved rather than locking in bad external data.
+  const [isEditing, setIsEditing] = useState(false);
   const [title, setTitle] = useState(lookedUpTitle ?? '');
   const [author, setAuthor] = useState(lookedUpAuthor ?? '');
 
@@ -49,33 +51,46 @@ export default function NotInCataloguePage({
           NOT IN CATALOGUE
         </span>
 
-        <p className="mt-sm text-sm text-ink-muted">
-          {lookedUpTitle
-            ? 'Found via lookup — check the title and author look right before adding.'
-            : `Barcode ${barcode} isn’t a known book yet — enter its details below.`}
-        </p>
-
-        <div className="mt-lg flex flex-col gap-sm">
-          <label className="flex flex-col gap-xs">
-            <span className="sr-only">Title</span>
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Title"
-              required
-              className="min-h-[56px] w-full rounded-md border border-line bg-surface-subtle px-md text-xl font-semibold text-ink-primary placeholder:text-base placeholder:font-normal placeholder:text-ink-muted"
-            />
-          </label>
-          <label className="flex flex-col gap-xs">
-            <span className="sr-only">Author</span>
-            <input
-              value={author}
-              onChange={(e) => setAuthor(e.target.value)}
-              placeholder="Author"
-              className="min-h-[48px] w-full rounded-md border border-line bg-surface-subtle px-md text-base text-ink-primary placeholder:text-ink-muted"
-            />
-          </label>
-        </div>
+        {isEditing ? (
+          <div className="mt-lg flex flex-col gap-sm">
+            <label className="flex flex-col gap-xs">
+              <span className="sr-only">Title</span>
+              <input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Title"
+                autoFocus
+                required
+                className="min-h-[56px] w-full rounded-md border border-line bg-surface-subtle px-md text-xl font-semibold text-ink-primary placeholder:text-base placeholder:font-normal placeholder:text-ink-muted"
+              />
+            </label>
+            <label className="flex flex-col gap-xs">
+              <span className="sr-only">Author</span>
+              <input
+                value={author}
+                onChange={(e) => setAuthor(e.target.value)}
+                placeholder="Author"
+                className="min-h-[48px] w-full rounded-md border border-line bg-surface-subtle px-md text-base text-ink-primary placeholder:text-ink-muted"
+              />
+            </label>
+          </div>
+        ) : (
+          <>
+            <div className="mt-lg flex items-start justify-between gap-md">
+              <h1 className="text-2xl font-semibold text-ink-primary">{title}</h1>
+              <button
+                type="button"
+                onClick={() => setIsEditing(true)}
+                className="shrink-0 pt-xs text-sm font-medium text-ink-muted underline"
+              >
+                Edit
+              </button>
+            </div>
+            <p className="mt-sm text-base text-ink-muted">
+              {author ? `${author} · ` : ''}Found via lookup, not yet in your catalogue.
+            </p>
+          </>
+        )}
 
         <div className="mt-auto flex shrink-0 flex-col gap-xs pt-xl">
           {error && <p className="text-sm text-red-600">{error}</p>}
