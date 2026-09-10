@@ -279,6 +279,11 @@ export default function ManageClassPage() {
 
           <div className="mt-xl">
             <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Students</p>
+            {!isLoading && !loadError && (
+              <p className="mt-xs text-sm text-ink-muted">
+                {students!.length} {students!.length === 1 ? 'student' : 'students'} in this class.
+              </p>
+            )}
           </div>
 
           {isLoading && <p className="mt-lg text-sm text-ink-muted">Loading students…</p>}
