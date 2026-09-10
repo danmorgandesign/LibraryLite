@@ -68,10 +68,7 @@ function extractIsbn(identifiers: Array<{ type: string; identifier: string }> | 
   );
 }
 
-// Google Books' public API — used to preview a book's details when it isn't
-// in our own catalogue yet (so "Add to catalogue" has something real to
-// show, not just the raw barcode).
-async function lookupExternalBookData(barcode: string): Promise<{ title: string | null; author: string | null; coverUrl: string | null }> {
+async function lookupGoogleBooksByIsbn(barcode: string): Promise<{ title: string | null; author: string | null; coverUrl: string | null }> {
   try {
     const params = new URLSearchParams({ q: `isbn:${barcode}`, key: GOOGLE_BOOKS_API_KEY });
     const res = await fetchWithTimeout(`https://www.googleapis.com/books/v1/volumes?${params.toString()}`);
@@ -89,11 +86,47 @@ async function lookupExternalBookData(barcode: string): Promise<{ title: string 
   }
 }
 
-// Reverse lookup for the cover-scan path: once we have a title/author (from
-// the cover, not a barcode), search Google Books for the matching edition's
-// ISBN, so the rest of the flow can treat it exactly like a barcode scan
-// (check our own catalogue, offer to add it, etc).
-async function lookupByTitleAndAuthor(title: string, author: string): Promise<{ isbn: string | null; coverUrl: string | null }> {
+// Open Library's per-ISBN data endpoint. No API key, no quota, and its
+// catalogue (sourced from library MARC records) covers a lot of
+// UK/international/older/educational editions that Google Books' ISBN index
+// simply doesn't have — queried alongside Google Books rather than instead
+// of it since neither source alone has good enough coverage on its own.
+async function lookupOpenLibraryByIsbn(barcode: string): Promise<{ title: string | null; author: string | null; coverUrl: string | null }> {
+  try {
+    const params = new URLSearchParams({ bibkeys: `ISBN:${barcode}`, format: 'json', jscmd: 'data' });
+    const res = await fetchWithTimeout(`https://openlibrary.org/api/books?${params.toString()}`);
+    if (!res.ok) return { title: null, author: null, coverUrl: null };
+    const data = await res.json();
+    const info = data[`ISBN:${barcode}`];
+    if (!info) return { title: null, author: null, coverUrl: null };
+    return {
+      title: info.title ?? null,
+      author: info.authors?.[0]?.name ?? null,
+      coverUrl: toHttps(info.cover?.medium ?? info.cover?.small),
+    };
+  } catch {
+    return { title: null, author: null, coverUrl: null };
+  }
+}
+
+// Used to preview a book's details when it isn't in our own catalogue yet
+// (so "Add to catalogue" has something real to show, not just the raw
+// barcode). Queries Google Books and Open Library in parallel and merges
+// them — each fills gaps the other misses, which matters a lot more than
+// the extra request given how often a single source comes back empty.
+async function lookupExternalBookData(barcode: string): Promise<{ title: string | null; author: string | null; coverUrl: string | null }> {
+  const [google, openLibrary] = await Promise.all([
+    lookupGoogleBooksByIsbn(barcode),
+    lookupOpenLibraryByIsbn(barcode),
+  ]);
+  return {
+    title: google.title ?? openLibrary.title,
+    author: google.author ?? openLibrary.author,
+    coverUrl: google.coverUrl ?? openLibrary.coverUrl,
+  };
+}
+
+async function lookupGoogleBooksByTitleAndAuthor(title: string, author: string): Promise<{ isbn: string | null; coverUrl: string | null }> {
   try {
     const q = author ? `intitle:${title} inauthor:${author}` : `intitle:${title}`;
     const params = new URLSearchParams({ q, key: GOOGLE_BOOKS_API_KEY });
@@ -109,6 +142,42 @@ async function lookupByTitleAndAuthor(title: string, author: string): Promise<{ 
   } catch {
     return { isbn: null, coverUrl: null };
   }
+}
+
+// Open Library's free-text search, as a fallback source for the same
+// title/author -> ISBN resolution Google Books does above.
+async function lookupOpenLibraryByTitleAndAuthor(title: string, author: string): Promise<{ isbn: string | null; coverUrl: string | null }> {
+  try {
+    const params = new URLSearchParams({ title, limit: '1' });
+    if (author) params.set('author', author);
+    const res = await fetchWithTimeout(`https://openlibrary.org/search.json?${params.toString()}`);
+    if (!res.ok) return { isbn: null, coverUrl: null };
+    const data = await res.json();
+    const doc = data.docs?.[0];
+    if (!doc) return { isbn: null, coverUrl: null };
+    return {
+      isbn: doc.isbn?.[0] ?? null,
+      coverUrl: doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` : null,
+    };
+  } catch {
+    return { isbn: null, coverUrl: null };
+  }
+}
+
+// Reverse lookup for the cover-scan path: once we have a title/author (from
+// the cover, not a barcode), find the matching edition's ISBN so the rest of
+// the flow can treat it exactly like a barcode scan (check our own
+// catalogue, offer to add it, etc). Tries Google Books and Open Library in
+// parallel for the same reason as lookupExternalBookData above.
+async function lookupByTitleAndAuthor(title: string, author: string): Promise<{ isbn: string | null; coverUrl: string | null }> {
+  const [google, openLibrary] = await Promise.all([
+    lookupGoogleBooksByTitleAndAuthor(title, author),
+    lookupOpenLibraryByTitleAndAuthor(title, author),
+  ]);
+  return {
+    isbn: google.isbn ?? openLibrary.isbn,
+    coverUrl: google.coverUrl ?? openLibrary.coverUrl,
+  };
 }
 
 async function lookupBarcode(barcode: string): Promise<ScanResult> {
@@ -144,20 +213,22 @@ async function lookupBarcode(barcode: string): Promise<ScanResult> {
 }
 
 // After a successful cover scan we have a title/author but not yet a
-// barcode. Resolve one via Open Library, then run the normal barcode lookup
-// against it — falling back to the barcode actually printed on this copy
-// (the one the barcode scan already failed to identify) if no edition match
-// turns up, so "not in catalogue" always has a real barcode to attach to.
+// barcode. Resolve one via lookupByTitleAndAuthor, then run the normal
+// barcode lookup against it — falling back to the barcode actually printed
+// on this copy (the one the barcode scan already failed to identify) if no
+// edition match turns up, so "not in catalogue" always has a real barcode
+// to attach to.
 async function resolveCoverMatch(originalBarcode: string, title: string, author: string): Promise<ScanResult> {
   const { isbn, coverUrl } = await lookupByTitleAndAuthor(title, author);
 
   if (!isbn) {
-    // Open Library — a real, fuzzy-matching search — found nothing at all
-    // for this title/author. That's the strongest signal available that
-    // the OCR guess isn't a real, reliable read (garbled text, a partial
-    // capture, etc), so this counts as a failed cover scan rather than a
-    // genuine "not in catalogue" book: falling back to the original scanned
-    // barcode here would just relabel that same failure as if it were a
+    // Neither Google Books nor Open Library's fuzzy search found anything
+    // at all for this title/author. That's the strongest signal available
+    // that the OCR guess isn't a real, reliable read (garbled text, a
+    // partial capture, etc), so this counts as a failed cover scan rather
+    // than a genuine "not in catalogue" book: falling back to the original
+    // scanned barcode here would just relabel that same failure as if it
+    // were a
     // confirmed new book, using unverified text as its title.
     return { status: 'cover-not-recognized', barcode: originalBarcode };
   }
