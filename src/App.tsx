@@ -15,6 +15,7 @@ import StudentsPage from './pages/StudentsPage';
 import StudentDetailPage from './pages/StudentDetailPage';
 import ManageTeachersPage from './pages/ManageTeachersPage';
 import ProfilePage from './pages/ProfilePage';
+import SchoolPage from './pages/SchoolPage';
 import TeacherOnboardingPage from './pages/TeacherOnboardingPage';
 
 // HashRouter (not BrowserRouter) because this app deploys as a static build
@@ -129,6 +130,14 @@ export default function App() {
             element={
               <RequireAuth>
                 <ProfilePage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/school"
+            element={
+              <RequireAuth>
+                <SchoolPage />
               </RequireAuth>
             }
           />

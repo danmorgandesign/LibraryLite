@@ -13,11 +13,7 @@ type Props = {
 
 const ITEMS = [
   { label: 'My Profile', to: '/profile' },
-  // No School page yet — rendered as an inert row rather than a NavLink so
-  // it doesn't take part in route matching (a NavLink to="#" resolves to
-  // the current path under HashRouter, so it would show as "active" on
-  // every page).
-  { label: 'School', to: null },
+  { label: 'School', to: '/school' },
   { label: 'Classes', to: '/classes' },
   { label: 'Teachers', to: '/teachers' },
   { label: 'Books', to: '/books' },
@@ -82,32 +78,20 @@ export default function HamburgerMenu({ isOpen, onClose, anchorRef }: Props) {
           </button>
         </div>
         <nav aria-label="Menu" className="flex flex-col">
-          {ITEMS.map((item, i) =>
-            item.to === null ? (
-              <span
-                key={item.label}
-                aria-disabled="true"
-                className={`flex min-h-[44px] items-center justify-end px-md py-sm text-sm font-medium text-ink-muted ${
+          {ITEMS.map((item, i) => (
+            <NavLink
+              key={item.label}
+              to={item.to}
+              onClick={onClose}
+              className={({ isActive }) =>
+                `flex min-h-[44px] items-center justify-end px-md py-sm text-sm font-medium ${
                   i > 0 ? 'border-t border-line' : ''
-                }`}
-              >
-                {item.label}
-              </span>
-            ) : (
-              <NavLink
-                key={item.label}
-                to={item.to}
-                onClick={onClose}
-                className={({ isActive }) =>
-                  `flex min-h-[44px] items-center justify-end px-md py-sm text-sm font-medium ${
-                    i > 0 ? 'border-t border-line' : ''
-                  } ${isActive ? 'text-ink-primary' : 'text-ink-muted hover:text-ink-primary'}`
-                }
-              >
-                {item.label}
-              </NavLink>
-            ),
-          )}
+                } ${isActive ? 'text-ink-primary' : 'text-ink-muted hover:text-ink-primary'}`
+              }
+            >
+              {item.label}
+            </NavLink>
+          ))}
         </nav>
       </div>
     </>,
