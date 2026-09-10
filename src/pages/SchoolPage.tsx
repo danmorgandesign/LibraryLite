@@ -39,22 +39,35 @@ async function fetchTeachers(): Promise<Teacher[]> {
   return (data as unknown as Parameters<typeof mapTeacherRow>[0][]).map(mapTeacherRow);
 }
 
-async function fetchSchoolName(schoolId: string): Promise<string> {
+type SchoolDetails = { name: string; address: string | null; postcode: string | null };
+
+async function fetchSchoolDetails(schoolId: string): Promise<SchoolDetails> {
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase.from('schools').select('name').eq('id', schoolId).single();
+  const { data, error } = await supabase
+    .from('schools')
+    .select('name, address, postcode')
+    .eq('id', schoolId)
+    .single();
   if (error) throw error;
-  return data.name;
+  return data;
 }
 
-async function saveSchoolName(schoolId: string, nextName: string): Promise<void> {
+async function saveSchoolField(
+  schoolId: string,
+  field: keyof SchoolDetails,
+  nextValue: string,
+): Promise<void> {
   const supabase = getSupabaseClient();
-  const { error } = await supabase.from('schools').update({ name: nextName.trim() }).eq('id', schoolId);
+  const { error } = await supabase
+    .from('schools')
+    .update({ [field]: nextValue.trim() || null })
+    .eq('id', schoolId);
   if (error) throw error;
 }
 
 // Row with a live edit affordance — only used for fields the schema
-// actually persists (currently just the school name). Mirrors
-// ProfilePage.tsx's ProfileField pattern.
+// actually persists (name/address/postcode). Mirrors ProfilePage.tsx's
+// ProfileField pattern.
 function EditableDetailRow({
   label,
   displayValue,
@@ -114,10 +127,10 @@ function EditableDetailRow({
   );
 }
 
-// Static row for fields the schema doesn't persist yet (address, postcode,
-// subscription/billing) — no Edit button, since there's nowhere for an
-// edit to be saved. Values are placeholder copy matching the Figma
-// reference (node 643:2, APP-07 My School), not live data.
+// Static row for fields the schema doesn't persist yet (subscription/
+// billing) — no Edit button, since there's nowhere for an edit to be
+// saved. Values are placeholder copy matching the Figma reference (node
+// 643:2, APP-07 My School), not live data.
 function StaticDetailRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="border-b border-line py-lg last:border-b-0">
@@ -129,20 +142,20 @@ function StaticDetailRow({ label, value }: { label: string; value: string }) {
 
 export default function SchoolPage() {
   const { teacher } = useAuth();
-  const [schoolName, setSchoolName] = useState<string | null>(null);
-  const [nameError, setNameError] = useState<string | null>(null);
+  const [school, setSchool] = useState<SchoolDetails | null>(null);
+  const [detailsError, setDetailsError] = useState<string | null>(null);
   const [teachers, setTeachers] = useState<Teacher[] | null>(null);
   const [teachersError, setTeachersError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!teacher) return;
     let cancelled = false;
-    fetchSchoolName(teacher.school_id)
-      .then((name) => {
-        if (!cancelled) setSchoolName(name);
+    fetchSchoolDetails(teacher.school_id)
+      .then((details) => {
+        if (!cancelled) setSchool(details);
       })
       .catch((err) => {
-        if (!cancelled) setNameError(err instanceof Error ? err.message : 'Could not load school name.');
+        if (!cancelled) setDetailsError(err instanceof Error ? err.message : 'Could not load school details.');
       });
     return () => {
       cancelled = true;
@@ -176,23 +189,39 @@ export default function SchoolPage() {
 
           <div className="mt-lg grid grid-cols-1 gap-lg lg:grid-cols-[1fr_320px]">
             <div className="rounded-md border border-line bg-surface px-lg">
-              {schoolName !== null && teacher ? (
-                <EditableDetailRow
-                  label="School Name"
-                  displayValue={schoolName}
-                  onSave={async (next) => {
-                    await saveSchoolName(teacher.school_id, next);
-                    setSchoolName(next);
-                  }}
-                />
+              {school && teacher ? (
+                <>
+                  <EditableDetailRow
+                    label="School Name"
+                    displayValue={school.name}
+                    onSave={async (next) => {
+                      await saveSchoolField(teacher.school_id, 'name', next);
+                      setSchool({ ...school, name: next.trim() });
+                    }}
+                  />
+                  <EditableDetailRow
+                    label="Address"
+                    displayValue={school.address ?? ''}
+                    onSave={async (next) => {
+                      await saveSchoolField(teacher.school_id, 'address', next);
+                      setSchool({ ...school, address: next.trim() || null });
+                    }}
+                  />
+                  <EditableDetailRow
+                    label="Postcode"
+                    displayValue={school.postcode ?? ''}
+                    onSave={async (next) => {
+                      await saveSchoolField(teacher.school_id, 'postcode', next);
+                      setSchool({ ...school, postcode: next.trim() || null });
+                    }}
+                  />
+                </>
               ) : (
                 <div className="border-b border-line py-lg">
                   <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">School Name</p>
-                  <p className="mt-xs text-base font-semibold text-ink-primary">{nameError ?? 'Loading…'}</p>
+                  <p className="mt-xs text-base font-semibold text-ink-primary">{detailsError ?? 'Loading…'}</p>
                 </div>
               )}
-              <StaticDetailRow label="Address" value="1 School Lane, Bath" />
-              <StaticDetailRow label="Postcode" value="AB1 2CD" />
               <div className="border-b border-line py-lg last:border-b-0">
                 <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Admin</p>
                 <p className="mt-xs text-base font-semibold text-ink-primary">
@@ -226,7 +255,6 @@ export default function SchoolPage() {
             <StaticDetailRow label="Plan" value="School Plan – Annual" />
             <StaticDetailRow label="Price" value="£15/month, billed annually" />
             <StaticDetailRow label="Renews" value="8 September 2027" />
-            <StaticDetailRow label="Payment Method" value="Visa ending in 3456" />
           </div>
         </div>
       </main>
