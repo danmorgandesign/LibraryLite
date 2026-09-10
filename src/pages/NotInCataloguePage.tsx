@@ -81,9 +81,9 @@ export default function NotInCataloguePage({
               <button
                 type="button"
                 onClick={() => setIsEditing(true)}
-                className="shrink-0 pt-xs text-sm font-medium text-ink-muted underline"
+                className="shrink-0 pt-xs text-sm font-medium text-red-600 underline"
               >
-                Edit
+                Edit Title/Author details
               </button>
             </div>
             <p className="mt-sm text-base text-ink-muted">
