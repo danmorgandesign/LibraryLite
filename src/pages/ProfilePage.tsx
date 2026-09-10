@@ -38,18 +38,39 @@ function ProfileField({
         <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">{label}</p>
         {isEditing ? (
           options ? (
-            <select
-              autoFocus
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              className="mt-xs w-full rounded-sm border border-line bg-surface-subtle px-md py-xs text-base font-semibold text-ink-primary focus:outline-none focus:ring-2 focus:ring-ink-primary/20"
-            >
-              {options.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
+            <div className="relative mt-xs w-1/2">
+              {/* appearance-none drops the browser's own arrow (its inset
+                  isn't controllable) so the custom chevron below can sit
+                  exactly `xs` from the right — the same as the select's own
+                  top/bottom padding, so its spacing reads as even on all
+                  three sides instead of hugging the right edge. */}
+              <select
+                autoFocus
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                className="w-full appearance-none rounded-sm border border-line bg-surface-subtle py-xs pl-md pr-2xl text-base font-semibold text-ink-primary focus:outline-none focus:ring-2 focus:ring-ink-primary/20"
+              >
+                {options.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+              <svg
+                viewBox="0 0 16 16"
+                fill="none"
+                aria-hidden="true"
+                className="pointer-events-none absolute right-xs top-1/2 size-3 -translate-y-1/2 text-ink-muted"
+              >
+                <path
+                  d="M4 6L8 10L12 6"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </div>
           ) : (
             <input
               autoFocus
