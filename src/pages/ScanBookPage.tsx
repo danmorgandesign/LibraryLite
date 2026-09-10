@@ -458,11 +458,17 @@ export default function ScanBookPage() {
         coverUrl={coverUrl}
         isAdding={isAddingToCatalogue}
         error={addToCatalogueError}
-        onAddAndLoan={async () => {
+        onAddAndLoan={async (editedTitle, editedAuthor) => {
           setIsAddingToCatalogue(true);
           setAddToCatalogueError(null);
           try {
-            const book = await addBookToCatalogue({ schoolId: teacher.school_id, barcode, title, author, coverUrl });
+            const book = await addBookToCatalogue({
+              schoolId: teacher.school_id,
+              barcode,
+              title: editedTitle,
+              author: editedAuthor || null,
+              coverUrl,
+            });
             setScanResult({ status: 'selecting-student', book });
           } catch (err) {
             setAddToCatalogueError(err instanceof Error ? err.message : 'Could not add this book — try again.');
@@ -470,11 +476,17 @@ export default function ScanBookPage() {
             setIsAddingToCatalogue(false);
           }
         }}
-        onAddAndScanAnother={async () => {
+        onAddAndScanAnother={async (editedTitle, editedAuthor) => {
           setIsAddingToCatalogue(true);
           setAddToCatalogueError(null);
           try {
-            await addBookToCatalogue({ schoolId: teacher.school_id, barcode, title, author, coverUrl });
+            await addBookToCatalogue({
+              schoolId: teacher.school_id,
+              barcode,
+              title: editedTitle,
+              author: editedAuthor || null,
+              coverUrl,
+            });
             resetScan();
           } catch (err) {
             setAddToCatalogueError(err instanceof Error ? err.message : 'Could not add this book — try again.');
