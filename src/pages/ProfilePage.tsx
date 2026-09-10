@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Header from '../components/layout/Header';
 import { getSupabaseClient } from '../lib/supabaseClient';
 import { useAuth } from '../lib/auth';
@@ -165,6 +166,7 @@ export default function ProfilePage() {
   // RequireAuth guarantees a signed-in user with a linked teachers row by
   // the time this page renders.
   const { user, teacher, refreshTeacher } = useAuth();
+  const navigate = useNavigate();
 
   const [classrooms, setClassrooms] = useState<Classroom[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -266,8 +268,35 @@ export default function ProfilePage() {
               {classrooms && (
                 <div className="mt-sm flex flex-col">
                   {classrooms.map((classroom) => (
-                    <div key={classroom.id} className="border-b border-line py-sm last:border-b-0">
+                    <div
+                      key={classroom.id}
+                      className="flex items-center justify-between gap-sm border-b border-line py-sm last:border-b-0"
+                    >
                       <p className="font-semibold text-ink-primary">{classroom.class_label}</p>
+                      <div className="flex shrink-0 gap-xs">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            navigate(`/classes/${classroom.id}/manage`, {
+                              state: { classroomLabel: classroom.class_label },
+                            })
+                          }
+                          className="inline-flex min-h-[36px] items-center rounded-sm border border-line bg-surface px-sm text-sm font-medium text-ink-primary transition-opacity hover:opacity-80"
+                        >
+                          Manage
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            navigate(`/classes/${classroom.id}/loans`, {
+                              state: { classroomLabel: classroom.class_label },
+                            })
+                          }
+                          className="inline-flex min-h-[36px] items-center rounded-sm border border-line bg-surface px-sm text-sm font-medium text-ink-primary transition-opacity hover:opacity-80"
+                        >
+                          Loans
+                        </button>
+                      </div>
                     </div>
                   ))}
                   {classrooms.length === 0 && <p className="py-sm text-sm text-ink-muted">No classes yet.</p>}
