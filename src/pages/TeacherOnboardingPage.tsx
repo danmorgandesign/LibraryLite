@@ -26,9 +26,13 @@ function SignUpForm() {
     setIsSubmitting(true);
     setError(null);
     try {
+      // emailRedirectTo overrides the dashboard's Site URL default (still
+      // the unconfigured http://localhost:3000) — see the same fix on
+      // ProfilePage's requestEmailChange.
       const { data, error: signUpError } = await getSupabaseClient().auth.signUp({
         email: email.trim(),
         password,
+        options: { emailRedirectTo: window.location.origin },
       });
       if (signUpError) throw signUpError;
       // If a session came back immediately, AuthProvider's auth-state

@@ -24,9 +24,14 @@ export default function RegisterYourselfPage() {
     setError(null);
     try {
       const supabase = getSupabaseClient();
+      // emailRedirectTo overrides the dashboard's Site URL default (still
+      // the unconfigured http://localhost:3000), which was sending real
+      // confirmation links to a dead localhost address — see the same fix
+      // on ProfilePage's requestEmailChange.
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: email.trim(),
         password,
+        options: { emailRedirectTo: window.location.origin },
       });
       if (signUpError) throw signUpError;
 

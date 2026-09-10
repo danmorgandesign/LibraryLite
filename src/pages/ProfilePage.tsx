@@ -158,7 +158,16 @@ async function saveName(teacherId: string, nextName: string): Promise<void> {
 // inbox" notice instead of treating the field as saved.
 async function requestEmailChange(nextEmail: string): Promise<void> {
   const supabase = getSupabaseClient();
-  const { error } = await supabase.auth.updateUser({ email: nextEmail.trim() });
+  // Without an explicit emailRedirectTo, Supabase builds the confirmation
+  // link from the project's dashboard-configured Site URL — which was
+  // still the default http://localhost:3000, so confirming from the real
+  // site sent people to a dead localhost link. window.location.origin
+  // adapts automatically to wherever the app is actually running (dev or
+  // production) instead of hardcoding a domain.
+  const { error } = await supabase.auth.updateUser(
+    { email: nextEmail.trim() },
+    { emailRedirectTo: window.location.origin },
+  );
   if (error) throw error;
 }
 

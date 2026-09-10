@@ -1,4 +1,4 @@
-import { HashRouter, Route, Routes } from 'react-router-dom';
+import { HashRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider, RequireAuth } from './lib/auth';
 import LandingPage from './pages/LandingPage';
 import RegisterSchoolPage from './pages/RegisterSchoolPage';
@@ -141,6 +141,13 @@ export default function App() {
               </RequireAuth>
             }
           />
+
+          {/* Catch-all: also where a Supabase auth email link lands, since
+              HashRouter reads everything after "#" as a route — its own
+              "#message=…"/"#access_token=…" fragment otherwise matches no
+              Route above and renders blank. RequireAuth further bounces to
+              /login when there's no session. */}
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </AuthProvider>
     </HashRouter>
