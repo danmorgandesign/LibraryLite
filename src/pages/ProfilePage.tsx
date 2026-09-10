@@ -14,11 +14,10 @@ async function fetchClassrooms(): Promise<Classroom[]> {
 
 type SelectOption = { value: string; label: string };
 
-// Name and Email are still local-only here — onSave just updates this
-// page's own state, not the teachers row — matching the rest of the
-// prototype's edit UI until real persistence is built for them too. Class
-// is wired for real: its onSave writes to the teachers row (see
-// saveClassroom below) and refreshes the shared auth context.
+// Generic label/value row with an inline editor. What onSave actually does
+// varies per field — see saveName/saveClassroom/requestEmailChange below —
+// this component only handles the editing UI and the saving/error states
+// around calling it.
 function ProfileField({
   label,
   displayValue,
@@ -140,6 +139,28 @@ async function saveClassroom(teacherId: string, nextClassroomId: string): Promis
   if (error) throw error;
 }
 
+async function saveName(teacherId: string, nextName: string): Promise<void> {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase
+    .from('teachers')
+    .update({ name: nextName.trim() || null })
+    .eq('id', teacherId);
+  if (error) throw error;
+}
+
+// Unlike Name/Class, Email is a Supabase Auth credential (teachers.email is
+// only ever a pre-activation invite marker — this project has email
+// confirmation on, per auth.tsx), not a plain data column. updateUser sends
+// a confirmation link to the new address and doesn't take effect until it's
+// clicked, so the signed-in session's email — and this field's displayed
+// value — genuinely doesn't change yet. The caller shows a "check your
+// inbox" notice instead of treating the field as saved.
+async function requestEmailChange(nextEmail: string): Promise<void> {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase.auth.updateUser({ email: nextEmail.trim() });
+  if (error) throw error;
+}
+
 export default function ProfilePage() {
   // RequireAuth guarantees a signed-in user with a linked teachers row by
   // the time this page renders.
@@ -168,8 +189,9 @@ export default function ProfilePage() {
     ...(classrooms?.map((c) => ({ value: c.id, label: c.class_label })) ?? []),
   ];
 
-  const [name, setName] = useState(teacher?.name ?? '');
-  const [email, setEmail] = useState(user?.email ?? '');
+  // pendingEmail tracks a just-submitted change that's awaiting the
+  // confirmation link — user.email itself won't move until it's clicked.
+  const [pendingEmail, setPendingEmail] = useState<string | null>(null);
 
   return (
     <>
@@ -200,7 +222,16 @@ export default function ProfilePage() {
                 </button>
               </div>
 
-              <ProfileField label="Name" displayValue={name} editValue={name} onSave={setName} />
+              <ProfileField
+                label="Name"
+                displayValue={teacher?.name ?? ''}
+                editValue={teacher?.name ?? ''}
+                onSave={async (nextName) => {
+                  if (!teacher) return;
+                  await saveName(teacher.id, nextName);
+                  await refreshTeacher();
+                }}
+              />
               <ProfileField
                 label="Class"
                 displayValue={ownClassLabel}
@@ -212,7 +243,20 @@ export default function ProfilePage() {
                   await refreshTeacher();
                 }}
               />
-              <ProfileField label="Email" displayValue={email} editValue={email} onSave={setEmail} />
+              <ProfileField
+                label="Email"
+                displayValue={user?.email ?? ''}
+                editValue={user?.email ?? ''}
+                onSave={async (nextEmail) => {
+                  await requestEmailChange(nextEmail);
+                  setPendingEmail(nextEmail);
+                }}
+              />
+              {pendingEmail && (
+                <p className="-mt-md pb-lg text-sm text-ink-muted">
+                  Confirmation link sent to {pendingEmail} — your email won&rsquo;t change until you click it.
+                </p>
+              )}
             </div>
 
             <div className="rounded-md border border-line bg-surface p-lg">
