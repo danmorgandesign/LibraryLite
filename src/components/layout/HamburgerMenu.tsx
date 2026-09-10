@@ -39,7 +39,7 @@ export default function HamburgerMenu({ isOpen, onClose, anchorRef }: Props) {
   useEffect(() => {
     function measure() {
       const rect = anchorRef.current?.getBoundingClientRect();
-      if (rect) setPanelPos({ top: rect.bottom + 8, right: window.innerWidth - rect.right + 20 });
+      if (rect) setPanelPos({ top: rect.bottom, right: window.innerWidth - rect.right + 20 });
     }
     if (isOpen) {
       measure();
@@ -62,7 +62,7 @@ export default function HamburgerMenu({ isOpen, onClose, anchorRef }: Props) {
         aria-modal="true"
         aria-label="Menu"
         style={panelPos ? { top: panelPos.top, right: panelPos.right } : undefined}
-        className={`fixed z-30 w-[252px] rounded-md border border-line bg-surface shadow-lg transition-opacity ${
+        className={`fixed z-30 w-[252px] rounded-b-md border border-line bg-surface shadow-lg transition-opacity ${
           isOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
         }`}
       >
