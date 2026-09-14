@@ -7,7 +7,7 @@ import AuthHeader from '../components/layout/AuthHeader';
 export default function HoldingPage() {
   return (
     <div className="flex min-h-dvh flex-col">
-      <AuthHeader navItems={[{ label: 'Login', to: '/login' }]} />
+      <AuthHeader navItems={[]} />
 
       <main className="flex flex-1 items-center justify-center overflow-y-auto px-lg pb-2xl pt-2xl">
         <div className="w-full max-w-xl rounded-md border border-line bg-surface p-2xl text-center shadow-sm">
