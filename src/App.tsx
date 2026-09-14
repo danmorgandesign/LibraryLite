@@ -1,7 +1,11 @@
 import { useEffect } from 'react';
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider, RequireAuth, markInviteLanding } from './lib/auth';
-import LandingPage from './pages/LandingPage';
+// LandingPage swapped out for HoldingPage below while registration email is
+// broken (Supabase custom SMTP mid-setup, signups currently 500ing) — swap
+// this import and the "/" route element back once that's confirmed fixed.
+// import LandingPage from './pages/LandingPage';
+import HoldingPage from './pages/HoldingPage';
 import RegisterSchoolPage from './pages/RegisterSchoolPage';
 import RegisterYourselfPage from './pages/RegisterYourselfPage';
 import AdminOnboardingPage from './pages/AdminOnboardingPage';
@@ -46,7 +50,7 @@ export default function App() {
       <AuthProvider>
         <Routes>
           {/* Public / pre-auth — no session required */}
-          <Route path="/" element={<LandingPage />} />
+          <Route path="/" element={<HoldingPage />} />
           <Route path="/register-school" element={<RegisterSchoolPage />} />
           <Route path="/register-yourself" element={<RegisterYourselfPage />} />
           <Route path="/login" element={<LoginPage />} />
