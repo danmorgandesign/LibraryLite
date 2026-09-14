@@ -52,11 +52,16 @@ async function fetchClassrooms(): Promise<Classroom[]> {
   return data;
 }
 
-async function addTeacher(schoolId: string, name: string, classroomId: string | null): Promise<Teacher> {
+async function addTeacher(
+  schoolId: string,
+  name: string,
+  email: string,
+  classroomId: string | null,
+): Promise<Teacher> {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from('teachers')
-    .insert({ school_id: schoolId, name, classroom_id: classroomId })
+    .insert({ school_id: schoolId, name, email, classroom_id: classroomId })
     .select(TEACHER_SELECT)
     .single();
   if (error) throw error;
@@ -81,7 +86,7 @@ async function removeTeacher(id: string): Promise<void> {
   if (error) throw error;
 }
 
-type Modal = { type: 'add' } | { type: 'edit'; teacher: Teacher } | null;
+type Modal = { type: 'add' } | { type: 'edit'; teacher: Teacher } | { type: 'confirmAdd' } | null;
 
 function ModalShell({ children }: { children: React.ReactNode }) {
   return (
@@ -98,6 +103,7 @@ export default function ManageTeachersPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [modal, setModal] = useState<Modal>(null);
   const [nameInput, setNameInput] = useState('');
+  const [emailInput, setEmailInput] = useState('');
   const [classroomIdInput, setClassroomIdInput] = useState('');
   const [actionError, setActionError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -124,20 +130,24 @@ export default function ManageTeachersPage() {
   const closeModal = () => {
     setModal(null);
     setNameInput('');
+    setEmailInput('');
     setClassroomIdInput('');
     setActionError(null);
   };
 
   const handleAdd = async () => {
-    if (!nameInput.trim() || !currentTeacher) return;
+    if (!nameInput.trim() || !emailInput.trim() || !currentTeacher) return;
     setIsSubmitting(true);
     setActionError(null);
     try {
-      const teacher = await addTeacher(currentTeacher.school_id, nameInput.trim(), classroomIdInput || null);
+      const teacher = await addTeacher(currentTeacher.school_id, nameInput.trim(), emailInput.trim(), classroomIdInput || null);
       setTeachers((prev) =>
         [...(prev ?? []), teacher].sort((a, b) => (a.name ?? a.email ?? '').localeCompare(b.name ?? b.email ?? '')),
       );
-      closeModal();
+      setNameInput('');
+      setEmailInput('');
+      setClassroomIdInput('');
+      setModal({ type: 'confirmAdd' });
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Could not add teacher.');
     } finally {
@@ -255,6 +265,13 @@ export default function ManageTeachersPage() {
               placeholder="Teacher name"
               className="mt-md w-full rounded-sm border border-line bg-surface-subtle px-md py-sm text-sm text-ink-primary placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-ink-primary/20"
             />
+            <input
+              type="email"
+              value={emailInput}
+              onChange={(e) => setEmailInput(e.target.value)}
+              placeholder="e.g. janesmith@yourschool.co.uk"
+              className="mt-sm w-full rounded-sm border border-line bg-surface-subtle px-md py-sm text-sm text-ink-primary placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-ink-primary/20"
+            />
             <select
               value={classroomIdInput}
               onChange={(e) => setClassroomIdInput(e.target.value)}
@@ -277,6 +294,27 @@ export default function ManageTeachersPage() {
               </button>
             </div>
           </form>
+        </ModalShell>
+      )}
+
+      {modal?.type === 'confirmAdd' && (
+        <ModalShell>
+          <div className="flex flex-col items-center text-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-50">
+              <span className="text-2xl font-bold text-emerald-600">✓</span>
+            </div>
+            <h2 className="mt-md text-lg font-semibold text-ink-primary">
+              That's great, a new teacher has been added.
+            </h2>
+            <p className="mt-xs text-sm text-ink-muted">A confirmation email has been sent to them to verify.</p>
+            <button
+              type="button"
+              onClick={closeModal}
+              className="mt-lg inline-flex min-h-[44px] w-full items-center justify-center rounded-sm bg-ink-primary px-md text-sm font-medium text-white"
+            >
+              Done
+            </button>
+          </div>
         </ModalShell>
       )}
 
