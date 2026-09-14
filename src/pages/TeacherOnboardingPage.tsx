@@ -189,7 +189,7 @@ function SetPasswordForm({ onDone }: { onDone: () => void }) {
         <button
           type="submit"
           disabled={isSubmitting}
-          className="mt-xl inline-flex min-h-[44px] w-full items-center justify-center rounded-sm bg-accent px-lg py-sm text-base font-medium text-ink-primary transition-opacity hover:opacity-90 disabled:opacity-60"
+          className="mt-xl inline-flex min-h-[44px] w-full items-center justify-center rounded-sm bg-ink-primary px-lg py-sm text-base font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-60"
         >
           {isSubmitting ? 'Saving…' : 'Set Password'}
         </button>
