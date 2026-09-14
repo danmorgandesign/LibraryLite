@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { FunctionsHttpError } from '@supabase/supabase-js';
 import Header from '../components/layout/Header';
 import { getSupabaseClient } from '../lib/supabaseClient';
 import { useAuth } from '../lib/auth';
@@ -76,7 +77,20 @@ async function inviteTeacher(email: string): Promise<string | null> {
   const { data, error } = await supabase.functions.invoke<{ ok?: boolean; error?: string }>('invite-teacher', {
     body: { email, redirectTo: window.location.origin },
   });
-  if (error) return error.message;
+  if (error) {
+    // FunctionsHttpError's own .message is just a generic "non-2xx status
+    // code" string — the actual reason invite-teacher rejected the call is
+    // in the response body, reachable only via .context (the raw Response).
+    if (error instanceof FunctionsHttpError) {
+      try {
+        const body = await error.context.json();
+        if (typeof body?.error === 'string') return body.error;
+      } catch {
+        // Body wasn't JSON — fall through to the generic message below.
+      }
+    }
+    return error.message;
+  }
   if (data?.error) return data.error;
   return null;
 }
