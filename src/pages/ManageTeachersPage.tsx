@@ -68,6 +68,19 @@ async function addTeacher(
   return mapTeacherRow(data as unknown as Parameters<typeof mapTeacherRow>[0]);
 }
 
+// Best-effort: the teachers row is already saved by the time this runs, so
+// a failure here (e.g. the Edge Function isn't deployed yet) shouldn't be
+// treated as the add itself failing — see the caller's inviteWarning.
+async function inviteTeacher(email: string): Promise<string | null> {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.functions.invoke<{ ok?: boolean; error?: string }>('invite-teacher', {
+    body: { email, redirectTo: window.location.origin },
+  });
+  if (error) return error.message;
+  if (data?.error) return data.error;
+  return null;
+}
+
 async function updateTeacher(id: string, name: string, classroomId: string | null): Promise<Teacher> {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
@@ -106,6 +119,7 @@ export default function ManageTeachersPage() {
   const [emailInput, setEmailInput] = useState('');
   const [classroomIdInput, setClassroomIdInput] = useState('');
   const [actionError, setActionError] = useState<string | null>(null);
+  const [inviteWarning, setInviteWarning] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -133,6 +147,7 @@ export default function ManageTeachersPage() {
     setEmailInput('');
     setClassroomIdInput('');
     setActionError(null);
+    setInviteWarning(null);
   };
 
   const handleAdd = async () => {
@@ -140,10 +155,12 @@ export default function ManageTeachersPage() {
     setIsSubmitting(true);
     setActionError(null);
     try {
-      const teacher = await addTeacher(currentTeacher.school_id, nameInput.trim(), emailInput.trim(), classroomIdInput || null);
+      const email = emailInput.trim();
+      const teacher = await addTeacher(currentTeacher.school_id, nameInput.trim(), email, classroomIdInput || null);
       setTeachers((prev) =>
         [...(prev ?? []), teacher].sort((a, b) => (a.name ?? a.email ?? '').localeCompare(b.name ?? b.email ?? '')),
       );
+      setInviteWarning(await inviteTeacher(email));
       setNameInput('');
       setEmailInput('');
       setClassroomIdInput('');
@@ -306,7 +323,14 @@ export default function ManageTeachersPage() {
             <h2 className="mt-md text-lg font-semibold text-ink-primary">
               That's great, a new teacher has been added.
             </h2>
-            <p className="mt-xs text-sm text-ink-muted">A confirmation email has been sent to them to verify.</p>
+            {inviteWarning ? (
+              <p className="mt-xs text-sm text-red-600">
+                We couldn't send their invite email automatically ({inviteWarning}). Ask them to sign up at{' '}
+                {window.location.origin}/#/teacher-onboarding using this same email address instead.
+              </p>
+            ) : (
+              <p className="mt-xs text-sm text-ink-muted">A confirmation email has been sent to them to verify.</p>
+            )}
             <button
               type="button"
               onClick={closeModal}

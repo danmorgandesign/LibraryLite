@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AuthHeader from '../components/layout/AuthHeader';
 import { getSupabaseClient } from '../lib/supabaseClient';
-import { useAuth, type Teacher as TeacherProfile } from '../lib/auth';
+import { useAuth, consumeInviteLanding, type Teacher as TeacherProfile } from '../lib/auth';
 
 type Student = { id: string; name: string };
 type Classroom = { id: string; class_label: string };
@@ -108,6 +108,91 @@ function SignUpForm() {
             </button>
           </>
         )}
+      </form>
+    </main>
+  );
+}
+
+// Shown once, right after an admin-invited teacher's email link signs them
+// in — admin.inviteUserByEmail() (invite-teacher Edge Function) never asks
+// for a password, so without this they'd have no way to log back in on a
+// different browser/device once this session's tokens expire.
+function SetPasswordForm({ onDone }: { onDone: () => void }) {
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async () => {
+    if (!password.trim()) return;
+    if (password !== confirmPassword) {
+      setError('Passwords do not match.');
+      return;
+    }
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      const { error: updateError } = await getSupabaseClient().auth.updateUser({ password });
+      if (updateError) throw updateError;
+      onDone();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not set your password.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <main className="flex min-h-screen items-center justify-center px-lg pb-2xl pt-2xl">
+      <form
+        className="w-full max-w-xl rounded-md border border-line bg-surface p-2xl shadow-sm"
+        onSubmit={(e) => {
+          e.preventDefault();
+          handleSubmit();
+        }}
+      >
+        <h1 className="text-2xl font-semibold text-ink-primary">Set a Password</h1>
+        <p className="mt-xs text-sm text-ink-muted">Choose a password so you can log back in next time.</p>
+
+        <div className="mt-lg flex flex-col gap-md">
+          <label className="flex flex-col gap-xs">
+            <span className="text-sm font-medium text-ink-primary">
+              Password <span className="text-red-600">*</span>
+            </span>
+            <input
+              required
+              autoFocus
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              className="min-h-[48px] w-full rounded-md border border-line bg-surface-subtle px-md text-sm text-ink-primary placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-ink-primary/20"
+            />
+          </label>
+          <label className="flex flex-col gap-xs">
+            <span className="text-sm font-medium text-ink-primary">
+              Confirm Password <span className="text-red-600">*</span>
+            </span>
+            <input
+              required
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="••••••••"
+              className="min-h-[48px] w-full rounded-md border border-line bg-surface-subtle px-md text-sm text-ink-primary placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-ink-primary/20"
+            />
+          </label>
+        </div>
+
+        {error && <p className="mt-md text-sm text-red-600">{error}</p>}
+
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className="mt-xl inline-flex min-h-[44px] w-full items-center justify-center rounded-sm bg-accent px-lg py-sm text-base font-medium text-ink-primary transition-opacity hover:opacity-90 disabled:opacity-60"
+        >
+          {isSubmitting ? 'Saving…' : 'Set Password'}
+        </button>
       </form>
     </main>
   );
@@ -339,6 +424,9 @@ export default function TeacherOnboardingPage() {
 
   const [isClaiming, setIsClaiming] = useState(false);
   const [claimError, setClaimError] = useState<string | null>(null);
+  // Lazy initializer: consume the flag exactly once, on this page's first
+  // render, rather than on every effect re-run.
+  const [needsPassword, setNeedsPassword] = useState(() => consumeInviteLanding());
 
   // Signed in but no teachers row yet — this is an invited teacher who
   // hasn't claimed their invite. Claim it automatically off their verified
@@ -404,6 +492,15 @@ export default function TeacherOnboardingPage() {
             <p className="text-sm text-ink-muted">{isClaiming ? 'Linking your account…' : 'One moment…'}</p>
           )}
         </main>
+      </>
+    );
+  }
+
+  if (needsPassword) {
+    return (
+      <>
+        <AuthHeader navItems={ONBOARDING_NAV} />
+        <SetPasswordForm onDone={() => setNeedsPassword(false)} />
       </>
     );
   }

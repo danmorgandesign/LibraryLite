@@ -53,6 +53,30 @@ function takePendingSchoolRegistration(): PendingSchoolRegistration | null {
   }
 }
 
+// An admin-invited teacher's email link (from the invite-teacher Edge
+// Function's admin.inviteUserByEmail()) signs them straight in with no
+// password set — unlike a self-serve TeacherOnboardingPage signup, where
+// they chose one themselves. App.tsx's catch-all route (where every
+// Supabase auth redirect fragment lands, see its own comment) reads
+// `type=invite` off that fragment and stashes this flag before the
+// fragment is lost to react-router's own hash-based routing.
+// TeacherOnboardingPage consumes it once to decide whether to prompt for a
+// password before letting the teacher into the app. sessionStorage (not
+// localStorage) deliberately: this should only ever apply to the tab that
+// just followed the invite link, not linger across unrelated future logins
+// on the same browser.
+const INVITE_LANDING_KEY = 'library-lite:invite-landing';
+
+export function markInviteLanding() {
+  sessionStorage.setItem(INVITE_LANDING_KEY, '1');
+}
+
+export function consumeInviteLanding(): boolean {
+  const wasSet = sessionStorage.getItem(INVITE_LANDING_KEY) === '1';
+  sessionStorage.removeItem(INVITE_LANDING_KEY);
+  return wasSet;
+}
+
 async function fetchOwnTeacherRow(userId: string): Promise<Teacher | null> {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase

@@ -1,5 +1,6 @@
+import { useEffect } from 'react';
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom';
-import { AuthProvider, RequireAuth } from './lib/auth';
+import { AuthProvider, RequireAuth, markInviteLanding } from './lib/auth';
 import LandingPage from './pages/LandingPage';
 import RegisterSchoolPage from './pages/RegisterSchoolPage';
 import RegisterYourselfPage from './pages/RegisterYourselfPage';
@@ -17,6 +18,20 @@ import ManageTeachersPage from './pages/ManageTeachersPage';
 import ProfilePage from './pages/ProfilePage';
 import SchoolPage from './pages/SchoolPage';
 import TeacherOnboardingPage from './pages/TeacherOnboardingPage';
+
+// Where every Supabase auth redirect fragment lands (see the Route below).
+// An invite-teacher link's fragment includes "type=invite" — stash that
+// before Navigate below replaces the URL and the fragment is gone for good,
+// so TeacherOnboardingPage can later tell an invited teacher (no password
+// yet) apart from a self-serve signup (already chose one).
+function AuthRedirectCatchAll() {
+  useEffect(() => {
+    if (window.location.hash.includes('type=invite')) {
+      markInviteLanding();
+    }
+  }, []);
+  return <Navigate to="/dashboard" replace />;
+}
 
 // HashRouter (not BrowserRouter) because this app deploys as a static build
 // to GitHub Pages — there's no server to rewrite deep links like
@@ -147,7 +162,7 @@ export default function App() {
               "#message=…"/"#access_token=…" fragment otherwise matches no
               Route above and renders blank. RequireAuth further bounces to
               /login when there's no session. */}
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          <Route path="*" element={<AuthRedirectCatchAll />} />
         </Routes>
       </AuthProvider>
     </HashRouter>
