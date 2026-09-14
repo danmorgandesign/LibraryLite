@@ -10,10 +10,10 @@ export default function RegisterSchoolPage() {
   const canSubmit = schoolName.trim() && postcode.trim();
 
   return (
-    <>
+    <div className="flex min-h-dvh flex-col">
       <AuthHeader navItems={[{ label: 'About Us', to: '/' }, { label: 'Login', to: '/login' }]} />
 
-      <main className="flex min-h-screen items-center justify-center px-lg pb-2xl pt-2xl">
+      <main className="flex flex-1 items-center justify-center overflow-y-auto px-lg pb-2xl pt-2xl">
         <form
           className="w-full max-w-xl rounded-md border border-line bg-surface p-2xl shadow-sm"
           onSubmit={(e) => {
@@ -61,6 +61,6 @@ export default function RegisterSchoolPage() {
           </button>
         </form>
       </main>
-    </>
+    </div>
   );
 }
